@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SVG → PNG</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: #e2e0da;
+    --text: #1a1916;
+    --muted: #8a8780;
+    --accent: #1a1916;
+    --accent-hover: #3d3b36;
+    --danger: #c0392b;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --radius: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  header {
+    margin-bottom: 40px;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  h1 {
+    font-size: 32px;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    color: var(--text);
+  }
+
+  h1 span {
+    color: var(--muted);
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  /* Upload Zone */
+  .upload-zone {
+    padding: 48px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .upload-zone:hover { background: #fafaf8; }
+  .upload-zone.has-file { cursor: default; }
+  .upload-zone.has-file:hover { background: var(--surface); }
+
+  .upload-icon {
+    width: 48px;
+    height: 48px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: border-color 0.15s;
+  }
+
+  .upload-zone:hover .upload-icon { border-color: var(--accent); }
+
+  .upload-icon svg { width: 20px; height: 20px; stroke: var(--muted); }
+
+  .upload-text h3 {
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 3px;
+  }
+
+  .upload-text p {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .file-badge {
+    display: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    color: var(--text);
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .file-badge.visible { display: block; }
+
+  #fileInput { display: none; }
+
+  /* Controls */
+  .controls-section {
+    padding: 28px 48px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .controls-grid {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr auto;
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .field input[type="number"],
+  .field select {
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  .field select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a8780' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+    cursor: pointer;
+  }
+
+  .field input:focus,
+  .field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(26,25,22,0.06);
+  }
+
+  .field input:disabled { color: var(--muted); background: var(--bg); cursor: not-allowed; }
+
+  /* Resolution step buttons */
+  .step-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .step-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .step-group {
+    display: flex;
+    gap: 1px;
+    background: var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .step-btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 12px;
+    background: var(--surface);
+    color: var(--text);
+    border: none;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    white-space: nowrap;
+  }
+
+  .step-btn:hover { background: var(--accent); color: white; }
+  .step-btn:disabled { color: var(--muted); cursor: not-allowed; background: var(--bg); }
+  .step-btn:disabled:hover { background: var(--bg); color: var(--muted); }
+
+  .step-divider {
+    display: flex;
+    align-items: center;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 0 4px;
+  }
+
+  /* Ratio toggle */
+  .ratio-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--muted);
+    user-select: none;
+  }
+
+  .ratio-toggle input { display: none; }
+
+  .toggle-track {
+    width: 32px;
+    height: 18px;
+    border-radius: 9px;
+    background: var(--border);
+    position: relative;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+
+  .toggle-track::after {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: white;
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.15s;
+  }
+
+  .ratio-toggle input:checked + .toggle-track { background: var(--accent); }
+  .ratio-toggle input:checked + .toggle-track::after { transform: translateX(14px); }
+
+  /* Action buttons */
+  .actions {
+    padding: 20px 48px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .btn {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 9px 20px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover:not(:disabled) { border-color: var(--accent); background: var(--bg); }
+
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .btn svg { width: 14px; height: 14px; }
+
+  /* Info bar */
+  .info-bar {
+    padding: 0 48px 20px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .info-chip {
+    display: flex;
+    gap: 6px;
+  }
+
+  .info-chip strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* Preview */
+  .preview-area {
+    background: var(--bg);
+    min-height: 360px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: auto;
+  }
+
+  .preview-empty {
+    text-align: center;
+    color: var(--muted);
+  }
+
+  .preview-empty svg {
+    width: 40px;
+    height: 40px;
+    stroke: var(--border);
+    margin-bottom: 12px;
+  }
+
+  .preview-empty p {
+    font-size: 13px;
+  }
+
+  canvas {
+    max-width: 100%;
+    max-height: 600px;
+    display: none;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  }
+
+  canvas.visible { display: block; }
+
+  .checkerboard {
+    background-image: linear-gradient(45deg, #ddd 25%, transparent 25%),
+      linear-gradient(-45deg, #ddd 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #ddd 75%),
+      linear-gradient(-45deg, transparent 75%, #ddd 75%);
+    background-size: 12px 12px;
+    background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+    background-color: #f0f0f0;
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <header>
+    <div class="logo">Utility Tool</div>
+    <h1>SVG <span>→</span> PNG</h1>
+  </header>
+
+  <div class="card">
+    <!-- Upload -->
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept=".svg">
+      <div class="upload-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </div>
+      <div class="upload-text">
+        <h3 id="uploadTitle">Choose an SVG file</h3>
+        <p id="uploadSub">Click to browse or drop a file here</p>
+      </div>
+      <span class="file-badge" id="fileBadge"></span>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-section">
+      <div class="controls-grid">
+        <div class="field">
+          <label>Preset</label>
+          <select id="resolutionSelect">
+            <option value="">— select —</option>
+            <option value="480">480p</option>
+            <option value="720">720p</option>
+            <option value="1080">1080p</option>
+            <option value="1440">2K</option>
+            <option value="2160">4K</option>
+            <option value="4320">8K</option>
+            <option value="recommended">Recommended</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Width (px)</label>
+          <input type="number" id="widthInput" placeholder="—" disabled>
+        </div>
+        <div class="field">
+          <label>Height (px)</label>
+          <input type="number" id="heightInput" placeholder="—" disabled>
+        </div>
+        <label class="ratio-toggle">
+          <input type="checkbox" id="maintainRatio" checked>
+          <span class="toggle-track"></span>
+          Ratio
+        </label>
+      </div>
+
+      <!-- Step buttons -->
+      <div class="step-row">
+        <span class="step-label">Adjust</span>
+        <div class="step-group">
+          <button class="step-btn" data-delta="-200" title="Decrease height by 200px">−200</button>
+          <button class="step-btn" data-delta="-100">−100</button>
+          <button class="step-btn" data-delta="-50">−50</button>
+        </div>
+        <div class="step-divider">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </div>
+        <div class="step-group">
+          <button class="step-btn" data-delta="50">+50</button>
+          <button class="step-btn" data-delta="100">+100</button>
+          <button class="step-btn" data-delta="200">+200</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button class="btn btn-primary" id="convertBtn" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+        Convert
+      </button>
+      <button class="btn btn-secondary" id="downloadBtn" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Download PNG
+      </button>
+
+      <div class="info-bar" id="infoBar" style="padding:0; margin-left:auto; border:none;">
+        <div class="info-chip" id="chipOriginal" style="display:none">
+          <span>original</span>
+          <strong id="valOriginal">—</strong>
+        </div>
+        <div class="info-chip" id="chipOutput" style="display:none">
+          <span>output</span>
+          <strong id="valOutput">—</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="preview-area checkerboard" id="previewArea">
+      <div class="preview-empty" id="previewEmpty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <p>Preview will appear here</p>
+      </div>
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+  let svgText = "";
+  let originalWidth = 0;
+  let originalHeight = 0;
+  let aspectRatio = 1;
+  let pngDataUrl = "";
+
+  const fileInput     = document.getElementById("fileInput");
+  const uploadZone    = document.getElementById("uploadZone");
+  const uploadTitle   = document.getElementById("uploadTitle");
+  const uploadSub     = document.getElementById("uploadSub");
+  const fileBadge     = document.getElementById("fileBadge");
+  const resolutionSelect = document.getElementById("resolutionSelect");
+  const widthInput    = document.getElementById("widthInput");
+  const heightInput   = document.getElementById("heightInput");
+  const maintainRatio = document.getElementById("maintainRatio");
+  const convertBtn    = document.getElementById("convertBtn");
+  const downloadBtn   = document.getElementById("downloadBtn");
+  const canvas        = document.getElementById("canvas");
+  const previewEmpty  = document.getElementById("previewEmpty");
+  const stepBtns      = document.querySelectorAll(".step-btn");
+  const chipOriginal  = document.getElementById("chipOriginal");
+  const chipOutput    = document.getElementById("chipOutput");
+  const valOriginal   = document.getElementById("valOriginal");
+  const valOutput     = document.getElementById("valOutput");
+
+  // Upload zone click
+  uploadZone.addEventListener("click", (e) => {
+    if (!uploadZone.classList.contains("has-file")) fileInput.click();
+  });
+
+  // Drag-and-drop
+  uploadZone.addEventListener("dragover", e => { e.preventDefault(); uploadZone.style.background = "#f0f0ed"; });
+  uploadZone.addEventListener("dragleave", () => { uploadZone.style.background = ""; });
+  uploadZone.addEventListener("drop", e => {
+    e.preventDefault();
+    uploadZone.style.background = "";
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith(".svg")) loadFile(file);
+  });
+
+  fileInput.addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (file) loadFile(file);
+  });
+
+  function loadFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      svgText = e.target.result;
+      extractDimensions(svgText);
+      convertBtn.disabled = false;
+      fileBadge.textContent = file.name;
+      fileBadge.classList.add("visible");
+      uploadTitle.textContent = "File loaded";
+      uploadSub.textContent = "Click Convert to render";
+      uploadZone.classList.add("has-file");
+    };
+    reader.readAsText(file);
+  }
+
+  function extractDimensions(svg) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svg, "image/svg+xml");
+    const svgEl = doc.querySelector("svg");
+    if (svgEl.viewBox.baseVal && svgEl.viewBox.baseVal.width) {
+      originalWidth  = svgEl.viewBox.baseVal.width;
+      originalHeight = svgEl.viewBox.baseVal.height;
+    } else {
+      originalWidth  = parseFloat(svgEl.getAttribute("width"))  || 800;
+      originalHeight = parseFloat(svgEl.getAttribute("height")) || 600;
+    }
+    aspectRatio = originalWidth / originalHeight;
+    valOriginal.textContent = `${originalWidth} × ${originalHeight}`;
+    chipOriginal.style.display = "flex";
+  }
+
+  resolutionSelect.addEventListener("change", handleResolutionChange);
+  widthInput.addEventListener("input", syncHeight);
+  heightInput.addEventListener("input", syncWidth);
+  convertBtn.addEventListener("click", convertImage);
+  downloadBtn.addEventListener("click", downloadImage);
+
+  // Step buttons
+  stepBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const delta = parseInt(btn.dataset.delta);
+      const currentH = parseInt(heightInput.value) || originalHeight || 1080;
+      const newH = Math.max(1, currentH + delta);
+      heightInput.value = newH;
+      if (maintainRatio.checked) widthInput.value = Math.round(newH * aspectRatio);
+      updateOutputChip();
+    });
+  });
+
+  function setStepBtnsEnabled(enabled) {
+    stepBtns.forEach(b => b.disabled = !enabled);
+  }
+
+  setStepBtnsEnabled(false);
+
+  function handleResolutionChange() {
+    const value = resolutionSelect.value;
+    widthInput.disabled = true;
+    heightInput.disabled = true;
+    setStepBtnsEnabled(true);
+
+    if (value === "custom") {
+      widthInput.disabled = false;
+      heightInput.disabled = false;
+      widthInput.value = originalWidth;
+      heightInput.value = originalHeight;
+    } else if (value === "recommended") {
+      const r = calculateRecommended();
+      widthInput.value = r.width;
+      heightInput.value = r.height;
+    } else if (value) {
+      const targetHeight = parseInt(value);
+      widthInput.value = Math.round(targetHeight * aspectRatio);
+      heightInput.value = targetHeight;
+    }
+    updateOutputChip();
+  }
+
+  function calculateRecommended() {
+    let w = originalWidth, h = originalHeight;
+    if (h < 1080) { h = 1080; w = Math.round(h * aspectRatio); }
+    else { w *= 2; h *= 2; }
+    if (h > 2160) { h = 2160; w = Math.round(h * aspectRatio); }
+    return { width: w, height: h };
+  }
+
+  function syncHeight() {
+    if (!maintainRatio.checked) return;
+    heightInput.value = Math.round(widthInput.value / aspectRatio);
+    updateOutputChip();
+  }
+
+  function syncWidth() {
+    if (!maintainRatio.checked) return;
+    widthInput.value = Math.round(heightInput.value * aspectRatio);
+    updateOutputChip();
+  }
+
+  function updateOutputChip() {
+    const w = widthInput.value, h = heightInput.value;
+    if (w && h) {
+      valOutput.textContent = `${w} × ${h}`;
+      chipOutput.style.display = "flex";
+    }
+  }
+
+  function convertImage() {
+    const width  = parseInt(widthInput.value);
+    const height = parseInt(heightInput.value);
+    if (!width || !height || !svgText) return;
+
+    convertBtn.textContent = "Converting…";
+    convertBtn.disabled = true;
+
+    const svgBlob = new Blob([svgText], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+
+    img.onload = () => {
+      canvas.width  = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+      pngDataUrl = canvas.toDataURL("image/png");
+      downloadBtn.disabled = false;
+      canvas.classList.add("visible");
+      previewEmpty.style.display = "none";
+      URL.revokeObjectURL(url);
+
+      convertBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Convert`;
+      convertBtn.disabled = false;
+      updateOutputChip();
+    };
+
+    img.onerror = () => {
+      alert("Failed to render SVG. The file may contain unsupported features.");
+      convertBtn.textContent = "Convert";
+      convertBtn.disabled = false;
+    };
+
+    img.src = url;
+  }
+
+  function downloadImage() {
+    const a = document.createElement("a");
+    a.href = pngDataUrl;
+    a.download = "converted.png";
+    a.click();
+  }
+</script>
+</body>
+</html>

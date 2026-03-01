@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>My AI Apps Gallery</title>
+  <link rel="stylesheet" href="app.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+  <div class="wrapper">
+
+    <header>
+      <h1>🚀 My AI Apps</h1>
+      <p class="subtitle">Collection of static apps built using AI</p>
+    </header>
+
+    <div class="controls">
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Search apps..." />
+      </div>
+
+      <div class="view-buttons">
+        <button id="gridBtn" class="active">⬛ Grid</button>
+        <button id="listBtn">📋 List</button>
+      </div>
+    </div>
+
+    <div id="appsContainer" class="grid"></div>
+
+  </div>
+
+  <script src="apps.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
