@@ -1,309 +1,514 @@
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--font-mono); }
-.wrap { padding: 1.5rem 0; max-width: 680px; }
-h2 { font-size: 18px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 4px; }
-.sub { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 1.5rem; }
-.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; padding: 3px 10px; border-radius: var(--border-radius-md); background: var(--color-background-success); color: var(--color-text-success); margin-bottom: 1.5rem; }
-.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-text-success); }
-.drop-zone { border: 1.5px dashed var(--color-border-secondary); border-radius: var(--border-radius-lg); padding: 2rem; text-align: center; cursor: pointer; transition: background 0.15s; min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
-.drop-zone:hover { background: var(--color-background-secondary); }
-.drop-label { font-size: 14px; color: var(--color-text-secondary); }
-.drop-hint { font-size: 12px; color: var(--color-text-tertiary); }
-textarea { width: 100%; min-height: 80px; font-family: var(--font-mono); font-size: 12px; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 10px 12px; background: var(--color-background-primary); color: var(--color-text-primary); resize: vertical; margin-top: 1rem; }
-textarea:focus { outline: none; border-color: var(--color-border-primary); }
-button { margin-top: 1rem; padding: 8px 20px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; color: var(--color-text-primary); cursor: pointer; font-size: 13px; }
-button:hover { background: var(--color-background-secondary); }
-.results { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 10px; }
-.account-card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px 16px; }
-.acc-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.acc-icon { width: 32px; height: 32px; border-radius: var(--border-radius-md); background: var(--color-background-info); color: var(--color-text-info); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; flex-shrink: 0; }
-.acc-name { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
-.acc-issuer { font-size: 12px; color: var(--color-text-secondary); }
-.uri-row { display: flex; align-items: center; gap: 8px; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 8px 10px; }
-.uri-text { font-family: var(--font-mono); font-size: 11px; color: var(--color-text-secondary); flex: 1; word-break: break-all; }
-.copy-btn { flex-shrink: 0; padding: 4px 10px; font-size: 11px; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); background: transparent; color: var(--color-text-secondary); cursor: pointer; white-space: nowrap; }
-.copy-btn:hover { background: var(--color-background-primary); }
-.totp-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
-.totp-code { font-size: 22px; font-weight: 500; letter-spacing: 4px; color: var(--color-text-primary); font-family: var(--font-mono); }
-.totp-timer { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
-.timer-ring { width: 20px; height: 20px; transform: rotate(-90deg); }
-.error { font-size: 13px; color: var(--color-text-danger); padding: 10px 14px; border: 0.5px solid var(--color-border-danger); border-radius: var(--border-radius-md); background: var(--color-background-danger); margin-top: 1rem; }
-.divider { border: none; border-top: 0.5px solid var(--color-border-tertiary); margin: 1.5rem 0; }
-</style>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OTPAuth Migration Decoder</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap');
 
-<div class="wrap">
-  <h2>otpauth migration decoder</h2>
-  <p class="sub">Paste your <code>otpauth-migration://offline?data=...</code> URL below. Everything runs in your browser — no data leaves your device.</p>
-  <div class="badge"><span class="dot"></span>100% local — no network requests</div>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileIn').click()">
-    <div class="drop-label">Drop a QR code image here</div>
-    <div class="drop-hint">or click to select a screenshot — or paste the URL below</div>
-    <input type="file" id="fileIn" accept="image/*" style="display:none">
-  </div>
-
-  <textarea id="urlInput" placeholder="otpauth-migration://offline?data=CjMKCk..."></textarea>
-  <button onclick="decode()">Decode</button>
-
-  <div id="output"></div>
-</div>
-
-<script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
-<script>
-const fileIn = document.getElementById('fileIn');
-const urlInput = document.getElementById('urlInput');
-const dropZone = document.getElementById('dropZone');
-
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.background = 'var(--color-background-secondary)'; });
-dropZone.addEventListener('dragleave', () => { dropZone.style.background = ''; });
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.style.background = ''; const f = e.dataTransfer.files[0]; if (f) readQR(f); });
-fileIn.addEventListener('change', () => { if (fileIn.files[0]) readQR(fileIn.files[0]); });
-
-function readQR(file) {
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width; canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const result = jsQR(id.data, id.width, id.height);
-      if (result) { urlInput.value = result.data; decode(); }
-      else showError('No QR code detected in image.');
-    };
-    img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-function showError(msg) {
-  document.getElementById('output').innerHTML = `<div class="error">${msg}</div>`;
-}
-
-function decode() {
-  const raw = urlInput.value.trim();
-  if (!raw) { showError('Paste a migration URL first.'); return; }
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'otpauth-migration:') throw new Error('Not an otpauth-migration URL');
-    const data = url.searchParams.get('data');
-    if (!data) throw new Error('Missing data parameter');
-    const bytes = base64ToBytes(data);
-    const accounts = parseProto(bytes);
-    if (!accounts.length) { showError('No accounts found in this migration data.'); return; }
-    renderAccounts(accounts);
-  } catch(e) {
-    showError('Decode error: ' + e.message);
-  }
-}
-
-function base64ToBytes(b64) {
-  const bin = atob(b64.replace(/-/g,'+').replace(/_/g,'/'));
-  return new Uint8Array([...bin].map(c => c.charCodeAt(0)));
-}
-
-function readVarint(bytes, pos) {
-  let result = 0, shift = 0;
-  while (pos < bytes.length) {
-    const b = bytes[pos++];
-    result |= (b & 0x7F) << shift;
-    shift += 7;
-    if (!(b & 0x80)) break;
-  }
-  return { value: result >>> 0, pos };
-}
-
-function readBytes(bytes, pos) {
-  const { value: len, pos: p } = readVarint(bytes, pos);
-  return { value: bytes.slice(p, p + len), pos: p + len };
-}
-
-function parseProto(bytes) {
-  const accounts = [];
-  let pos = 0;
-  while (pos < bytes.length) {
-    const { value: tag, pos: p1 } = readVarint(bytes, pos);
-    pos = p1;
-    const fieldNum = tag >>> 3;
-    const wireType = tag & 0x7;
-    if (wireType === 2) {
-      const { value: blob, pos: p2 } = readBytes(bytes, pos);
-      pos = p2;
-      if (fieldNum === 1) {
-        accounts.push(parseAccount(blob));
-      }
-    } else if (wireType === 0) {
-      const { pos: p2 } = readVarint(bytes, pos);
-      pos = p2;
-    } else {
-      pos++;
+    :root {
+      --bg: #0f1117;
+      --bg2: #181c27;
+      --bg3: #1e2333;
+      --border: #2a2f42;
+      --text: #e8eaf2;
+      --muted: #8b90a8;
+      --dim: #4a5068;
+      --accent: #5b8ff9;
+      --accent-dim: #1a2540;
+      --green: #4ade80;
+      --green-dim: #0f2a1a;
+      --red: #f87171;
+      --red-dim: #2a0f0f;
+      --radius: 10px;
+      --mono: 'IBM Plex Mono', monospace;
+      --sans: 'IBM Plex Sans', sans-serif;
     }
-  }
-  return accounts.filter(Boolean);
-}
 
-function parseAccount(bytes) {
-  const acc = { secret: null, name: '', issuer: '', algo: 1, digits: 6, type: 2, counter: 0 };
-  let pos = 0;
-  const td = new TextDecoder();
-  while (pos < bytes.length) {
-    const { value: tag, pos: p1 } = readVarint(bytes, pos);
-    pos = p1;
-    const field = tag >>> 3;
-    const wire = tag & 0x7;
-    if (wire === 2) {
-      const { value: blob, pos: p2 } = readBytes(bytes, pos);
-      pos = p2;
-      if (field === 1) acc.secret = blob;
-      else if (field === 2) acc.name = td.decode(blob);
-      else if (field === 3) acc.issuer = td.decode(blob);
-    } else if (wire === 0) {
-      const { value: v, pos: p2 } = readVarint(bytes, pos);
-      pos = p2;
-      if (field === 4) acc.algo = v;
-      else if (field === 5) acc.digits = v === 2 ? 8 : 6;
-      else if (field === 6) acc.type = v;
-      else if (field === 7) acc.counter = v;
-    } else { pos++; }
-  }
-  return acc.secret ? acc : null;
-}
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
 
-function base32Decode(str) {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  const s = str.replace(/=+$/, '').toUpperCase();
-  let bits = 0, val = 0;
-  const out = [];
-  for (const c of s) {
-    const idx = alphabet.indexOf(c);
-    if (idx < 0) continue;
-    val = (val << 5) | idx;
-    bits += 5;
-    if (bits >= 8) { bits -= 8; out.push((val >> bits) & 0xFF); }
-  }
-  return new Uint8Array(out);
-}
+    main {
+      max-width: 660px;
+      margin: 0 auto;
+    }
 
-function bytesToBase32(bytes) {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  let bits = 0, val = 0, out = '';
-  for (const b of bytes) {
-    val = (val << 8) | b; bits += 8;
-    while (bits >= 5) { bits -= 5; out += alphabet[(val >> bits) & 31]; }
-  }
-  if (bits > 0) out += alphabet[(val << (5 - bits)) & 31];
-  return out;
-}
+    header {
+      margin-bottom: 2rem;
+    }
 
-async function hmacSha1(key, data) {
-  const k = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', k, data);
-  return new Uint8Array(sig);
-}
+    h1 {
+      font-family: var(--mono);
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 0.35rem;
+    }
 
-async function computeTOTP(secretBytes, digits = 6) {
-  const t = Math.floor(Date.now() / 30000);
-  const buf = new ArrayBuffer(8);
-  const view = new DataView(buf);
-  view.setUint32(0, 0);
-  view.setUint32(4, t);
-  const hmac = await hmacSha1(secretBytes, buf);
-  const offset = hmac[19] & 0xF;
-  const code = ((hmac[offset] & 0x7F) << 24 | hmac[offset+1] << 16 | hmac[offset+2] << 8 | hmac[offset+3]) % Math.pow(10, digits);
-  return String(code).padStart(digits, '0');
-}
+    header p {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
 
-function buildTotpUri(acc) {
-  const secret = bytesToBase32(acc.secret);
-  const label = encodeURIComponent(acc.name || 'Account');
-  let uri = `otpauth://totp/${label}?secret=${secret}`;
-  if (acc.issuer) uri += `&issuer=${encodeURIComponent(acc.issuer)}`;
-  if (acc.digits !== 6) uri += `&digits=${acc.digits}`;
-  const algoMap = {1:'SHA1',2:'SHA256',3:'SHA512'};
-  if (acc.algo !== 1) uri += `&algorithm=${algoMap[acc.algo]||'SHA1'}`;
-  return uri;
-}
+    header p code {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--accent);
+    }
 
-function initials(name, issuer) {
-  const s = issuer || name || '?';
-  return s.replace(/\(.*?\)/g,'').trim().slice(0,2).toUpperCase();
-}
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid #1e4a30;
+      margin-top: 0.75rem;
+    }
 
-async function renderAccounts(accounts) {
-  const out = document.getElementById('output');
-  out.innerHTML = '<div class="results" id="results"></div>';
-  const results = document.getElementById('results');
+    .badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+    }
 
-  for (const acc of accounts) {
-    const uri = buildTotpUri(acc);
-    const card = document.createElement('div');
-    card.className = 'account-card';
-    const ini = initials(acc.name, acc.issuer);
-    card.innerHTML = `
-      <div class="acc-header">
-        <div class="acc-icon">${ini}</div>
-        <div>
-          <div class="acc-name">${esc(acc.name || 'Unknown')}</div>
-          ${acc.issuer ? `<div class="acc-issuer">${esc(acc.issuer)}</div>` : ''}
-        </div>
+    /* Drop zone */
+    .drop-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .drop-zone p { font-size: 0.85rem; color: var(--muted); }
+    .drop-zone small { font-size: 0.75rem; color: var(--dim); }
+
+    /* Form */
+    .input-group {
+      margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 72px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      background: var(--bg2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      resize: vertical;
+      transition: border-color 0.15s;
+    }
+
+    textarea::placeholder { color: var(--dim); }
+    textarea:focus { outline: none; border-color: var(--accent); }
+
+    button[type="submit"] {
+      align-self: flex-start;
+      padding: 7px 20px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    button[type="submit"]:hover { opacity: 0.85; }
+
+    /* Error */
+    .error {
+      font-size: 0.82rem;
+      color: var(--red);
+      background: var(--red-dim);
+      border: 1px solid #4a1f1f;
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      margin-top: 1rem;
+    }
+
+    /* Results */
+    #results {
+      margin-top: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    article {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+
+    .acc-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .acc-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      display: grid;
+      place-items: center;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .acc-name { font-size: 0.88rem; font-weight: 500; }
+    .acc-issuer { font-size: 0.75rem; color: var(--muted); margin-top: 1px; }
+
+    .uri-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg3);
+      border-radius: 7px;
+      padding: 8px 10px;
+    }
+
+    .uri-text {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--muted);
+      flex: 1;
+      word-break: break-all;
+    }
+
+    .copy-btn {
+      flex-shrink: 0;
+      padding: 3px 10px;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .copy-btn:hover { color: var(--text); border-color: var(--dim); }
+
+    .totp-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .totp-code {
+      font-family: var(--mono);
+      font-size: 1.5rem;
+      font-weight: 500;
+      letter-spacing: 3px;
+    }
+
+    .totp-timer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .timer-ring { width: 20px; height: 20px; transform: rotate(-90deg); }
+
+    hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>otpauth migration decoder</h1>
+      <p>Paste your <code>otpauth-migration://offline?data=…</code> URL, or drop a QR screenshot.</p>
+      <span class="badge">100% local — no network requests</span>
+    </header>
+
+    <section aria-label="Input">
+      <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Drop QR code image or click to select">
+        <p>Drop a QR code image here</p>
+        <small>or click to select a screenshot</small>
+        <input type="file" id="fileIn" accept="image/*" hidden>
       </div>
-      <div class="uri-row">
-        <div class="uri-text">${esc(uri)}</div>
-        <button class="copy-btn" onclick="copyText(this,'${esc(uri)}')">copy uri</button>
-      </div>
-      <div class="totp-row">
-        <div class="totp-code" id="code-${ini}-${Math.random().toString(36).slice(2)}">——————</div>
-        <div class="totp-timer">
-          <svg class="timer-ring" viewBox="0 0 20 20">
-            <circle cx="10" cy="10" r="8" fill="none" stroke="var(--color-border-tertiary)" stroke-width="2"/>
-            <circle cx="10" cy="10" r="8" fill="none" stroke="var(--color-text-secondary)" stroke-width="2"
-              stroke-dasharray="50.27" stroke-dashoffset="0" id="ring-${ini}" stroke-linecap="round"/>
-          </svg>
-          <span id="timer-${ini}">—s</span>
-        </div>
-      </div>`;
-    results.appendChild(card);
 
-    const codeEl = card.querySelector('.totp-code');
-    const ringEl = card.querySelector('circle:last-child');
-    const timerEl = card.querySelector('[id^="timer-"]');
+      <form class="input-group" id="decodeForm" novalidate>
+        <textarea id="urlInput" placeholder="otpauth-migration://offline?data=CjMKCk…" aria-label="Migration URL" spellcheck="false"></textarea>
+        <button type="submit">Decode →</button>
+      </form>
+    </section>
 
-    async function updateCode() {
-      if (acc.type === 1) {
-        codeEl.textContent = '(HOTP — counter-based)';
-        return;
+    <div id="output" role="status" aria-live="polite"></div>
+    <div id="results"></div>
+  </main>
+
+  <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script>
+    const fileIn   = document.getElementById('fileIn');
+    const urlInput = document.getElementById('urlInput');
+    const dropZone = document.getElementById('dropZone');
+
+    // Drop zone interactions
+    dropZone.addEventListener('click', () => fileIn.click());
+    dropZone.addEventListener('keydown', e => e.key === 'Enter' && fileIn.click());
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files[0]) readQR(e.dataTransfer.files[0]);
+    });
+    fileIn.addEventListener('change', () => { if (fileIn.files[0]) readQR(fileIn.files[0]); });
+
+    document.getElementById('decodeForm').addEventListener('submit', e => { e.preventDefault(); decode(); });
+
+    function readQR(file) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width; canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const result = jsQR(id.data, id.width, id.height);
+          if (result) { urlInput.value = result.data; decode(); }
+          else showError('No QR code detected in image.');
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function showError(msg) {
+      document.getElementById('output').innerHTML = `<p class="error">${esc(msg)}</p>`;
+      document.getElementById('results').innerHTML = '';
+    }
+
+    function decode() {
+      const raw = urlInput.value.trim();
+      if (!raw) { showError('Paste a migration URL first.'); return; }
+      try {
+        const url = new URL(raw);
+        if (url.protocol !== 'otpauth-migration:') throw new Error('Not an otpauth-migration URL');
+        const data = url.searchParams.get('data');
+        if (!data) throw new Error('Missing data parameter');
+        const bytes = base64ToBytes(data);
+        const accounts = parseProto(bytes);
+        if (!accounts.length) { showError('No accounts found in this migration data.'); return; }
+        document.getElementById('output').innerHTML = '';
+        renderAccounts(accounts);
+      } catch (e) {
+        showError('Decode error: ' + e.message);
       }
-      const code = await computeTOTP(acc.secret, acc.digits);
-      codeEl.textContent = code.slice(0,3) + ' ' + code.slice(3);
     }
 
-    function updateTimer() {
-      const now = Date.now();
-      const remaining = 30 - Math.floor((now / 1000) % 30);
-      timerEl.textContent = remaining + 's';
-      const progress = remaining / 30;
-      const circ = 50.27;
-      ringEl.setAttribute('stroke-dashoffset', circ * (1 - progress));
-      const prevRemaining = remaining + 1;
-      if (prevRemaining === 31 || remaining === 30) updateCode();
+    // --- Encoding helpers ---
+    const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+    function base64ToBytes(b64) {
+      const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/'));
+      return Uint8Array.from(bin, c => c.charCodeAt(0));
     }
 
-    await updateCode();
-    updateTimer();
-    setInterval(updateTimer, 1000);
-  }
-}
+    function bytesToBase32(bytes) {
+      let bits = 0, val = 0, out = '';
+      for (const b of bytes) {
+        val = (val << 8) | b; bits += 8;
+        while (bits >= 5) { bits -= 5; out += B32[(val >> bits) & 31]; }
+      }
+      if (bits > 0) out += B32[(val << (5 - bits)) & 31];
+      return out;
+    }
 
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+    // --- Protobuf parser ---
+    function readVarint(bytes, pos) {
+      let result = 0, shift = 0;
+      while (pos < bytes.length) {
+        const b = bytes[pos++];
+        result |= (b & 0x7F) << shift; shift += 7;
+        if (!(b & 0x80)) break;
+      }
+      return { value: result >>> 0, pos };
+    }
 
-function copyText(btn, text) {
-  navigator.clipboard.writeText(text).then(() => {
-    const orig = btn.textContent;
-    btn.textContent = 'copied!';
-    setTimeout(() => btn.textContent = orig, 1500);
-  });
-}
-</script>
+    function readBytes(bytes, pos) {
+      const { value: len, pos: p } = readVarint(bytes, pos);
+      return { value: bytes.slice(p, p + len), pos: p + len };
+    }
+
+    function parseProto(bytes) {
+      const accounts = []; let pos = 0;
+      while (pos < bytes.length) {
+        const { value: tag, pos: p1 } = readVarint(bytes, pos); pos = p1;
+        const wire = tag & 0x7;
+        if (wire === 2) {
+          const { value: blob, pos: p2 } = readBytes(bytes, pos); pos = p2;
+          if (tag >>> 3 === 1) accounts.push(parseAccount(blob));
+        } else if (wire === 0) { const { pos: p2 } = readVarint(bytes, pos); pos = p2; }
+        else pos++;
+      }
+      return accounts.filter(Boolean);
+    }
+
+    function parseAccount(bytes) {
+      const acc = { secret: null, name: '', issuer: '', algo: 1, digits: 6, type: 2, counter: 0 };
+      const td = new TextDecoder(); let pos = 0;
+      while (pos < bytes.length) {
+        const { value: tag, pos: p1 } = readVarint(bytes, pos); pos = p1;
+        const field = tag >>> 3, wire = tag & 0x7;
+        if (wire === 2) {
+          const { value: blob, pos: p2 } = readBytes(bytes, pos); pos = p2;
+          if (field === 1) acc.secret = blob;
+          else if (field === 2) acc.name = td.decode(blob);
+          else if (field === 3) acc.issuer = td.decode(blob);
+        } else if (wire === 0) {
+          const { value: v, pos: p2 } = readVarint(bytes, pos); pos = p2;
+          if (field === 4) acc.algo = v;
+          else if (field === 5) acc.digits = v === 2 ? 8 : 6;
+          else if (field === 6) acc.type = v;
+          else if (field === 7) acc.counter = v;
+        } else pos++;
+      }
+      return acc.secret ? acc : null;
+    }
+
+    // --- TOTP ---
+    async function computeTOTP(secret, digits = 6) {
+      const t = Math.floor(Date.now() / 30000);
+      const buf = new ArrayBuffer(8);
+      new DataView(buf).setUint32(4, t);
+      const key = await crypto.subtle.importKey('raw', secret, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+      const hmac = new Uint8Array(await crypto.subtle.sign('HMAC', key, buf));
+      const off = hmac[19] & 0xF;
+      const code = ((hmac[off] & 0x7F) << 24 | hmac[off+1] << 16 | hmac[off+2] << 8 | hmac[off+3]) % 10**digits;
+      return String(code).padStart(digits, '0');
+    }
+
+    function buildUri(acc) {
+      const secret = bytesToBase32(acc.secret);
+      let uri = `otpauth://totp/${encodeURIComponent(acc.name || 'Account')}?secret=${secret}`;
+      if (acc.issuer) uri += `&issuer=${encodeURIComponent(acc.issuer)}`;
+      if (acc.digits !== 6) uri += `&digits=${acc.digits}`;
+      const algoMap = { 1: 'SHA1', 2: 'SHA256', 3: 'SHA512' };
+      if (acc.algo !== 1) uri += `&algorithm=${algoMap[acc.algo] || 'SHA1'}`;
+      return uri;
+    }
+
+    function initials(name, issuer) {
+      return (issuer || name || '?').replace(/\(.*?\)/g, '').trim().slice(0, 2).toUpperCase();
+    }
+
+    async function renderAccounts(accounts) {
+      const container = document.getElementById('results');
+      container.innerHTML = '';
+
+      for (const acc of accounts) {
+        const uri = buildUri(acc);
+        const ini = initials(acc.name, acc.issuer);
+
+        const article = document.createElement('article');
+        article.innerHTML = `
+          <div class="acc-header">
+            <div class="acc-icon" aria-hidden="true">${ini}</div>
+            <div>
+              <div class="acc-name">${esc(acc.name || 'Unknown')}</div>
+              ${acc.issuer ? `<div class="acc-issuer">${esc(acc.issuer)}</div>` : ''}
+            </div>
+          </div>
+          <div class="uri-row">
+            <code class="uri-text">${esc(uri)}</code>
+            <button class="copy-btn" type="button">copy uri</button>
+          </div>
+          <div class="totp-row">
+            <output class="totp-code">——————</output>
+            <div class="totp-timer">
+              <svg class="timer-ring" viewBox="0 0 20 20" aria-hidden="true">
+                <circle cx="10" cy="10" r="8" fill="none" stroke="#2a2f42" stroke-width="2"/>
+                <circle cx="10" cy="10" r="8" fill="none" stroke="#8b90a8" stroke-width="2"
+                  stroke-dasharray="50.27" stroke-dashoffset="0" stroke-linecap="round"/>
+              </svg>
+              <span>—s</span>
+            </div>
+          </div>`;
+
+        const codeEl  = article.querySelector('.totp-code');
+        const ringEl  = article.querySelectorAll('circle')[1];
+        const timerEl = article.querySelector('.totp-timer span');
+        const copyBtn = article.querySelector('.copy-btn');
+
+        copyBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(uri).then(() => {
+            copyBtn.textContent = 'copied!';
+            setTimeout(() => copyBtn.textContent = 'copy uri', 1500);
+          });
+        });
+
+        async function updateCode() {
+          if (acc.type === 1) { codeEl.textContent = 'HOTP (counter-based)'; return; }
+          const code = await computeTOTP(acc.secret, acc.digits);
+          codeEl.textContent = code.slice(0, 3) + ' ' + code.slice(3);
+        }
+
+        function tick() {
+          const rem = 30 - Math.floor((Date.now() / 1000) % 30);
+          timerEl.textContent = rem + 's';
+          ringEl.setAttribute('stroke-dashoffset', 50.27 * (1 - rem / 30));
+          if (rem === 30) updateCode();
+        }
+
+        await updateCode();
+        tick();
+        setInterval(tick, 1000);
+        container.appendChild(article);
+      }
+    }
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+  </script>
+</body>
+</html>
