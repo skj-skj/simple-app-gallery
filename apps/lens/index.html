@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lens — Reverse Image Search Hub</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ═══════════════════════════════════════════════════
+       DESIGN TOKENS & RESET
+    ═══════════════════════════════════════════════════ */
+    :root {
+      --bg:         #0a0a0f;
+      --surface:    #111118;
+      --surface2:   #1a1a26;
+      --border:     #2a2a3a;
+      --border-hi:  #3d3d55;
+      --text:       #e8e8f0;
+      --text-dim:   #8888aa;
+      --text-xdim:  #55556a;
+      --accent:     #6c63ff;
+      --accent-dim: #3d3880;
+      --accent-glow:#6c63ff44;
+      --green:      #2dce89;
+      --red:        #f5365c;
+      --yellow:     #ffc107;
+      --radius:     12px;
+      --radius-sm:  8px;
+      --mono:       'Space Mono', monospace;
+      --sans:       'DM Sans', sans-serif;
+      --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 4rem;
+      /* subtle grid noise background */
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, #6c63ff18 0%, transparent 60%),
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 100% 100%, 40px 40px, 40px 40px;
+      background-position: 0 0, -1px -1px, -1px -1px;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       LAYOUT
+    ═══════════════════════════════════════════════════ */
+    .wrapper {
+      width: 100%;
+      max-width: 740px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      animation: fadeUp 0.5s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ═══════════════════════════════════════════════════
+       HEADER
+    ═══════════════════════════════════════════════════ */
+    header {
+      text-align: center;
+      padding: 1.5rem 0 0.5rem;
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), #a78bfa);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .logo-name {
+      font-family: var(--mono);
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff 40%, var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .tagline {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      letter-spacing: 0.04em;
+      font-weight: 300;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       CARD
+    ═══════════════════════════════════════════════════ */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      backdrop-filter: blur(8px);
+    }
+
+    .card-title {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      color: var(--text-xdim);
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       DROP ZONE
+    ═══════════════════════════════════════════════════ */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #drop-zone::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at center, var(--accent-glow), transparent 70%);
+      opacity: 0;
+      transition: opacity var(--transition);
+      pointer-events: none;
+    }
+
+    #drop-zone:hover,
+    #drop-zone.drag-over {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    #drop-zone:hover::before,
+    #drop-zone.drag-over::before { opacity: 1; }
+
+    #drop-zone.drag-over { background: #6c63ff0a; }
+
+    .drop-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+      display: block;
+      transition: transform var(--transition);
+    }
+
+    #drop-zone:hover .drop-icon { transform: scale(1.1); }
+
+    .drop-title {
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 0.4rem;
+    }
+
+    .drop-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    .drop-subtitle kbd {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--text-dim);
+    }
+
+    .browse-btn {
+      margin-top: 1.25rem;
+      display: inline-block;
+      padding: 0.5rem 1.25rem;
+      background: var(--surface2);
+      border: 1px solid var(--border-hi);
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      transition: background var(--transition), border-color var(--transition);
+    }
+
+    .browse-btn:hover {
+      background: var(--border);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* hidden file input */
+    #file-input { display: none; }
+
+    /* ═══════════════════════════════════════════════════
+       PREVIEW SECTION
+    ═══════════════════════════════════════════════════ */
+    #preview-section {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+      animation: fadeUp 0.3s ease both;
+    }
+
+    #preview-section.visible { display: flex; }
+
+    .preview-layout {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    #preview-img {
+      width: 140px;
+      height: 140px;
+      object-fit: contain;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+    }
+
+    .meta-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.6rem 0.75rem;
+    }
+
+    .meta-label {
+      font-size: 0.65rem;
+      font-family: var(--mono);
+      letter-spacing: 0.1em;
+      color: var(--text-xdim);
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+    }
+
+    .meta-value {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    .clear-btn {
+      align-self: flex-start;
+      padding: 0.35rem 0.8rem;
+      font-size: 0.75rem;
+      font-family: var(--mono);
+      background: transparent;
+      border: 1px solid var(--red);
+      border-radius: 5px;
+      color: var(--red);
+      cursor: pointer;
+      transition: background var(--transition), color var(--transition);
+    }
+
+    .clear-btn:hover { background: var(--red); color: #fff; }
+
+    /* ═══════════════════════════════════════════════════
+       EXIF SECTION
+    ═══════════════════════════════════════════════════ */
+    #exif-section {
+      display: none;
+    }
+
+    #exif-section.visible { display: block; }
+
+    .exif-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .exif-item {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.65rem;
+    }
+
+    .exif-label {
+      font-size: 0.62rem;
+      font-family: var(--mono);
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 0.15rem;
+    }
+
+    .exif-value {
+      font-size: 0.8rem;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .exif-none {
+      font-size: 0.8rem;
+      color: var(--text-xdim);
+      font-style: italic;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       ENGINE BUTTONS
+    ═══════════════════════════════════════════════════ */
+    .engines-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .engine-btn {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 1rem 0.75rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition), background var(--transition);
+      font-family: var(--sans);
+      color: var(--text);
+      text-align: center;
+      user-select: none;
+    }
+
+    .engine-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .engine-btn:not(:disabled):hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+
+    .engine-btn.google:not(:disabled):hover  { border-color: #4285f4; box-shadow: 0 8px 24px #4285f422; }
+    .engine-btn.yandex:not(:disabled):hover  { border-color: #fc3f1d; box-shadow: 0 8px 24px #fc3f1d22; }
+    .engine-btn.all:not(:disabled):hover     { border-color: var(--accent); box-shadow: 0 8px 24px var(--accent-glow); }
+
+    .engine-icon {
+      font-size: 1.6rem;
+      line-height: 1;
+    }
+
+    .engine-name {
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .engine-desc {
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      font-weight: 400;
+    }
+
+    /* Search-All button — full row */
+    .search-all-row {
+      margin-top: 0.25rem;
+    }
+
+    .btn-all {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      padding: 0.85rem 1.5rem;
+      background: linear-gradient(135deg, var(--accent-dim), #3d2a80);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      color: #fff;
+      font-family: var(--sans);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity var(--transition), transform var(--transition), box-shadow var(--transition);
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    .btn-all:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .btn-all:not(:disabled):hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 32px var(--accent-glow);
+    }
+
+    /* Loading spinner on buttons */
+    .spinner {
+      display: none;
+      width: 14px; height: 14px;
+      border: 2px solid #ffffff44;
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading .spinner { display: inline-block; }
+
+    /* ═══════════════════════════════════════════════════
+       PRIVACY NOTICE
+    ═══════════════════════════════════════════════════ */
+    .privacy-notice {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      background: #2dce891a;
+      border: 1px solid #2dce8944;
+      border-radius: var(--radius-sm);
+      padding: 0.9rem 1rem;
+      font-size: 0.8rem;
+      color: #a0e8c8;
+      line-height: 1.55;
+    }
+
+    .privacy-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 0.05rem; }
+
+    /* ═══════════════════════════════════════════════════
+       TOAST NOTIFICATION
+    ═══════════════════════════════════════════════════ */
+    #toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--surface2);
+      border: 1px solid var(--border-hi);
+      border-radius: 8px;
+      padding: 0.65rem 1.25rem;
+      font-size: 0.82rem;
+      color: var(--text);
+      z-index: 999;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      white-space: nowrap;
+    }
+
+    #toast.show { transform: translateX(-50%) translateY(0); }
+    #toast.error { border-color: var(--red); color: var(--red); }
+    #toast.success { border-color: var(--green); color: var(--green); }
+
+    /* ═══════════════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════════════ */
+    footer {
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--text-xdim);
+      padding-top: 0.5rem;
+    }
+
+    footer a { color: var(--text-dim); text-decoration: none; }
+    footer a:hover { color: var(--accent); }
+
+    /* ═══════════════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════════════ */
+    @media (max-width: 500px) {
+      .preview-layout { grid-template-columns: 1fr; }
+      #preview-img { width: 100%; height: 200px; }
+      .meta-grid { grid-template-columns: 1fr; }
+      .engines-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ═══════════════════════════════════════════════════
+       ENGINE STATUS BADGES
+    ═══════════════════════════════════════════════════ */
+    .engine-badge {
+      font-size: 0.6rem;
+      font-family: var(--mono);
+      letter-spacing: 0.06em;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-top: 2px;
+    }
+
+    .badge-direct {
+      background: #2dce8922;
+      color: #2dce89;
+      border: 1px solid #2dce8944;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       HIDDEN FORMS (used for submission)
+    ═══════════════════════════════════════════════════ */
+    .hidden-forms { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════ HIDDEN SUBMISSION FORMS ════════════════════════ -->
+<!-- Google Lens and Yandex accept direct multipart form POSTs — no backend needed. -->
+<div class="hidden-forms" aria-hidden="true">
+  <!-- Google Lens -->
+  <form id="form-google" method="POST"
+        action="https://lens.google.com/upload"
+        enctype="multipart/form-data" target="_blank">
+    <input type="file" name="encoded_image" id="input-google" />
+    <input type="hidden" name="hl" value="en" />
+  </form>
+
+  <!-- Yandex Images -->
+  <form id="form-yandex" method="POST"
+        action="https://yandex.com/images/search?rpt=imageview&url=https://upload.yandex.net/recognition/process"
+        enctype="multipart/form-data" target="_blank">
+    <input type="file" name="upfile" id="input-yandex" />
+    <input type="hidden" name="rpt" value="imageview" />
+  </form>
+</div>
+
+<!-- ════════════════════════ MAIN UI ════════════════════════ -->
+<div class="wrapper">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <span class="logo-icon">🔍</span>
+      <span class="logo-name">LENS</span>
+    </div>
+    <p class="tagline">Reverse Image Search Hub &mdash; fast, private, zero-backend</p>
+  </header>
+
+  <!-- Drop Zone Card -->
+  <div class="card">
+    <p class="card-title">01 // Select Image</p>
+
+    <div id="drop-zone" role="button" tabindex="0" aria-label="Drop image here or click to browse">
+      <span class="drop-icon" id="drop-icon">🖼️</span>
+      <p class="drop-title">Drop your image here</p>
+      <p class="drop-subtitle">
+        or <strong>click to browse</strong> &nbsp;·&nbsp;
+        <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste &nbsp;·&nbsp;
+        drag &amp; drop supported
+      </p>
+      <span class="browse-btn" role="button">Browse Files</span>
+    </div>
+
+    <input type="file" id="file-input" accept="image/*" />
+
+    <!-- Preview (shown after image selected) -->
+    <div id="preview-section">
+      <hr style="border:none; border-top:1px solid var(--border); margin: 1rem 0 0.25rem;" />
+      <div class="preview-layout">
+        <img id="preview-img" src="" alt="Preview" />
+        <div style="display:flex; flex-direction:column; gap:0.6rem; min-width:0;">
+          <div class="meta-grid">
+            <div class="meta-item">
+              <div class="meta-label">File Name</div>
+              <div class="meta-value" id="meta-name">—</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">File Size</div>
+              <div class="meta-value" id="meta-size">—</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Resolution</div>
+              <div class="meta-value" id="meta-res">—</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Type</div>
+              <div class="meta-value" id="meta-type">—</div>
+            </div>
+          </div>
+          <button class="clear-btn" id="clear-btn" type="button">✕ Clear Image</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXIF Card -->
+  <div class="card" id="exif-section">
+    <p class="card-title">02 // EXIF Metadata</p>
+    <div id="exif-content"></div>
+  </div>
+
+  <!-- Search Engines Card -->
+  <div class="card">
+    <p class="card-title">03 // Search Engines</p>
+
+    <div class="engines-grid">
+      <!-- Google Lens -->
+      <button class="engine-btn google" id="btn-google" type="button" disabled>
+        <span class="engine-icon">🔵</span>
+        <span class="engine-name">Google Lens</span>
+        <span class="engine-desc">Visual AI search</span>
+        <span class="engine-badge badge-direct">Direct Upload</span>
+      </button>
+
+      <!-- Yandex -->
+      <button class="engine-btn yandex" id="btn-yandex" type="button" disabled>
+        <span class="engine-icon">🔴</span>
+        <span class="engine-name">Yandex</span>
+        <span class="engine-desc">Great for faces</span>
+        <span class="engine-badge badge-direct">Direct Upload</span>
+      </button>
+
+    </div>
+
+    <!-- Search All -->
+    <div class="search-all-row">
+      <button class="btn-all" id="btn-all" type="button" disabled>
+        <span class="spinner" id="spinner-all"></span>
+        <span>⚡ Search All Engines</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Privacy Notice -->
+  <div class="privacy-notice">
+    <span class="privacy-icon">🔒</span>
+    <span>
+      <strong>Privacy first.</strong> Your image is <em>never</em> uploaded to our server.
+      It is sent directly from your browser to the selected search engine via a standard
+      HTML form POST. We store nothing.
+    </span>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>Lens &mdash; Reverse Image Search Hub &nbsp;·&nbsp; No tracking &nbsp;·&nbsp; No ads &nbsp;·&nbsp; Open source spirit</p>
+  </footer>
+
+</div><!-- /.wrapper -->
+
+<!-- Toast notification -->
+<div id="toast" role="alert" aria-live="polite"></div>
+
+<!-- ════════════════════════ JAVASCRIPT ════════════════════════ -->
+<script>
+  /* ─────────────────────────────────────────────────────────────
+     STATE
+  ───────────────────────────────────────────────────────────── */
+  let currentFile = null;  // the File object currently selected
+
+  /* ─────────────────────────────────────────────────────────────
+     DOM REFERENCES
+  ───────────────────────────────────────────────────────────── */
+  const dropZone      = document.getElementById('drop-zone');
+  const fileInput     = document.getElementById('file-input');
+  const previewSection= document.getElementById('preview-section');
+  const previewImg    = document.getElementById('preview-img');
+  const metaName      = document.getElementById('meta-name');
+  const metaSize      = document.getElementById('meta-size');
+  const metaRes       = document.getElementById('meta-res');
+  const metaType      = document.getElementById('meta-type');
+  const clearBtn      = document.getElementById('clear-btn');
+  const exifSection   = document.getElementById('exif-section');
+  const exifContent   = document.getElementById('exif-content');
+  const btnGoogle     = document.getElementById('btn-google');
+  const btnYandex     = document.getElementById('btn-yandex');
+  const btnAll        = document.getElementById('btn-all');
+  const toast         = document.getElementById('toast');
+
+  const allEngineBtns = [btnGoogle, btnYandex];
+
+  /* ─────────────────────────────────────────────────────────────
+     UTILITY: TOAST
+  ───────────────────────────────────────────────────────────── */
+  let toastTimer;
+  function showToast(msg, type = '') {
+    clearTimeout(toastTimer);
+    toast.textContent = msg;
+    toast.className = 'show ' + type;
+    toastTimer = setTimeout(() => { toast.className = ''; }, 3500);
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     UTILITY: FORMAT FILE SIZE
+  ───────────────────────────────────────────────────────────── */
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     UTILITY: VALIDATE FILE TYPE
+  ───────────────────────────────────────────────────────────── */
+  function isImageFile(file) {
+    return file && file.type.startsWith('image/');
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     CORE: HANDLE FILE SELECTION
+  ───────────────────────────────────────────────────────────── */
+  function handleFile(file) {
+    if (!file) return;
+    if (!isImageFile(file)) {
+      showToast('⚠ Please select a valid image file.', 'error');
+      return;
+    }
+    currentFile = file;
+
+    // Update file metadata display
+    metaName.textContent = file.name;
+    metaSize.textContent = formatSize(file.size);
+    metaType.textContent = file.type.replace('image/', '').toUpperCase();
+
+    // Create object URL for preview
+    const url = URL.createObjectURL(file);
+    previewImg.onload = () => {
+      metaRes.textContent = `${previewImg.naturalWidth} × ${previewImg.naturalHeight}`;
+      URL.revokeObjectURL(url);
+    };
+    previewImg.src = url;
+
+    // Show preview section
+    previewSection.classList.add('visible');
+
+    // Enable search buttons
+    allEngineBtns.forEach(b => b.disabled = false);
+    btnAll.disabled = false;
+
+    // Extract EXIF data
+    extractExif(file);
+
+    showToast('✓ Image loaded successfully', 'success');
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     CORE: CLEAR IMAGE
+  ───────────────────────────────────────────────────────────── */
+  function clearImage() {
+    currentFile = null;
+    previewImg.src = '';
+    previewSection.classList.remove('visible');
+    fileInput.value = '';
+    exifSection.classList.remove('visible');
+    exifContent.innerHTML = '';
+    allEngineBtns.forEach(b => b.disabled = true);
+    btnAll.disabled = true;
+    showToast('Image cleared');
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     SEARCH: Direct form submit (Google, Yandex)
+  ───────────────────────────────────────────────────────────── */
+  function transferFileToInput(inputEl) {
+    if (!currentFile) return false;
+    const dt = new DataTransfer();
+    dt.items.add(currentFile);
+    inputEl.files = dt.files;
+    return true;
+  }
+
+  function submitEngine(formId, inputId) {
+    if (!currentFile) { showToast('⚠ Please select an image first.', 'error'); return; }
+    const form  = document.getElementById(formId);
+    const input = document.getElementById(inputId);
+    if (!transferFileToInput(input)) return;
+    form.submit();
+  }
+
+  function searchGoogle() { submitEngine('form-google', 'input-google'); }
+  function searchYandex() { submitEngine('form-yandex', 'input-yandex'); }
+
+  function searchAll() {
+    if (!currentFile) { showToast('⚠ Please select an image first.', 'error'); return; }
+    btnAll.classList.add('loading');
+    btnAll.disabled = true;
+    setTimeout(() => searchGoogle(), 0);
+    setTimeout(() => searchYandex(), 200);
+    setTimeout(() => {
+      btnAll.classList.remove('loading');
+      btnAll.disabled = false;
+      showToast('🚀 Opened all engines in new tabs', 'success');
+    }, 500);
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     EXIF: Extract basic EXIF metadata using a manual binary parser
+     (no external library — reads JPEG APP1 markers for EXIF IFD)
+  ───────────────────────────────────────────────────────────── */
+  function extractExif(file) {
+    if (!file.type.includes('jpeg') && !file.type.includes('jpg')) {
+      exifContent.innerHTML = '<p class="exif-none">EXIF data is only available for JPEG images.</p>';
+      exifSection.classList.add('visible');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const buf = e.target.result;
+      const data = new DataView(buf);
+      const tags = parseExif(data);
+      renderExif(tags);
+    };
+    reader.readAsArrayBuffer(file.slice(0, 128 * 1024));
+  }
+
+  function parseExif(view) {
+    const tags = {};
+    if (view.getUint16(0) !== 0xFFD8) return tags;
+
+    let offset = 2;
+    while (offset < view.byteLength - 4) {
+      const marker = view.getUint16(offset);
+      offset += 2;
+      if (marker === 0xFFE1) {
+        const length = view.getUint16(offset);
+        const exifHeader = String.fromCharCode(
+          view.getUint8(offset + 2), view.getUint8(offset + 3),
+          view.getUint8(offset + 4), view.getUint8(offset + 5)
+        );
+        if (exifHeader === 'Exif') {
+          parseIFD(view, offset + 8, tags);
+        }
+        offset += length;
+      } else if ((marker & 0xFF00) === 0xFF00) {
+        const segLen = view.getUint16(offset);
+        offset += segLen;
+      } else {
+        break;
+      }
+    }
+    return tags;
+  }
+
+  function parseIFD(view, tiffStart, tags) {
+    const byteOrder = view.getUint16(tiffStart);
+    const le = byteOrder === 0x4949;
+
+    const readUint16 = (o) => view.getUint16(tiffStart + o, le);
+    const readUint32 = (o) => view.getUint32(tiffStart + o, le);
+
+    const ifdOffset = readUint32(4);
+
+    const tagNames = {
+      0x010F: 'Make', 0x0110: 'Model', 0x0112: 'Orientation',
+      0x0132: 'DateTime', 0x013B: 'Artist',
+      0x8769: 'ExifIFD', 0x9003: 'DateTimeOriginal',
+      0x9004: 'DateTimeDigitized', 0xA002: 'PixelXDimension',
+      0xA003: 'PixelYDimension', 0x8827: 'ISOSpeedRatings',
+      0x829A: 'ExposureTime', 0x829D: 'FNumber',
+      0x9209: 'Flash', 0x920A: 'FocalLength',
+      0xA001: 'ColorSpace', 0xA434: 'LensModel',
+    };
+
+    try {
+      const numEntries = readUint16(ifdOffset);
+      for (let i = 0; i < numEntries && i < 50; i++) {
+        const entryOffset = ifdOffset + 2 + (i * 12);
+        const tag = readUint16(entryOffset);
+        const type = readUint16(entryOffset + 2);
+        const count = readUint32(entryOffset + 4);
+        const valueOffset = readUint32(entryOffset + 8);
+
+        if (tagNames[tag]) {
+          const val = readTagValue(view, tiffStart, type, count, entryOffset + 8, valueOffset, le);
+          if (val !== null && val !== undefined) tags[tagNames[tag]] = val;
+        }
+      }
+
+      if (tags['ExifIFD']) {
+        const exifIfdOffset = parseInt(tags['ExifIFD']);
+        if (!isNaN(exifIfdOffset)) {
+          const numSubEntries = readUint16(exifIfdOffset);
+          for (let i = 0; i < numSubEntries && i < 50; i++) {
+            const entryOffset = exifIfdOffset + 2 + (i * 12);
+            const tag = readUint16(entryOffset);
+            const type = readUint16(entryOffset + 2);
+            const count = readUint32(entryOffset + 4);
+            const valueOffset = readUint32(entryOffset + 8);
+            if (tagNames[tag]) {
+              const val = readTagValue(view, tiffStart, type, count, entryOffset + 8, valueOffset, le);
+              if (val !== null && val !== undefined) tags[tagNames[tag]] = val;
+            }
+          }
+        }
+        delete tags['ExifIFD'];
+      }
+    } catch (err) {}
+  }
+
+  function readTagValue(view, tiffStart, type, count, inlineOffset, valueOffset, le) {
+    const readU16 = (o) => view.getUint16(tiffStart + o, le);
+    const readU32 = (o) => view.getUint32(tiffStart + o, le);
+    const readI32 = (o) => view.getInt32(tiffStart + o, le);
+
+    try {
+      if (type === 2) {
+        const dataOffset = count <= 4 ? (tiffStart + inlineOffset) : (tiffStart + valueOffset);
+        let str = '';
+        for (let i = 0; i < count - 1 && i < 64; i++) {
+          const ch = view.getUint8(dataOffset + i);
+          if (ch === 0) break;
+          str += String.fromCharCode(ch);
+        }
+        return str.trim();
+      }
+      if (type === 3) return readU16(inlineOffset);
+      if (type === 4) return readU32(inlineOffset);
+      if (type === 5) {
+        const num = readU32(valueOffset);
+        const den = readU32(valueOffset + 4);
+        if (den === 0) return null;
+        return (num / den).toFixed(4).replace(/\.?0+$/, '');
+      }
+      if (type === 9) return readI32(inlineOffset);
+      if (type === 10) {
+        const num = view.getInt32(tiffStart + valueOffset, le);
+        const den = view.getInt32(tiffStart + valueOffset + 4, le);
+        if (den === 0) return null;
+        return (num / den).toFixed(4).replace(/\.?0+$/, '');
+      }
+    } catch (err) { return null; }
+    return null;
+  }
+
+  function renderExif(tags) {
+    const displayMap = {
+      'Make': 'Camera Make', 'Model': 'Camera Model',
+      'DateTime': 'Date / Time', 'DateTimeOriginal': 'Date Taken',
+      'ISOSpeedRatings': 'ISO', 'ExposureTime': 'Exposure',
+      'FNumber': 'F-Number', 'FocalLength': 'Focal Length',
+      'Flash': 'Flash', 'PixelXDimension': 'EXIF Width',
+      'PixelYDimension': 'EXIF Height', 'ColorSpace': 'Color Space',
+      'LensModel': 'Lens', 'Artist': 'Artist', 'Orientation': 'Orientation',
+    };
+
+    const usable = Object.keys(displayMap).filter(k => tags[k] !== undefined && tags[k] !== '');
+
+    if (usable.length === 0) {
+      exifContent.innerHTML = '<p class="exif-none">No EXIF metadata found in this image.</p>';
+    } else {
+      const flashMap = {0:'No Flash',1:'Fired',5:'Fired (no strobe)',7:'Fired (strobe)',
+        9:'Fill Flash',16:'Off',24:'Auto (off)',25:'Auto On',32:'No Flash',65:'Red-Eye'};
+      const csMap = {1:'sRGB', 65535:'Uncalibrated'};
+      const oriMap = {1:'Normal',2:'Mirrored H',3:'180°',4:'Mirrored V',
+        5:'90° CW Mirror',6:'90° CW',7:'90° CCW Mirror',8:'90° CCW'};
+
+      const html = usable.map(k => {
+        let val = tags[k];
+        if (k === 'Flash' && flashMap[val]) val = flashMap[val];
+        if (k === 'ColorSpace' && csMap[val]) val = csMap[val];
+        if (k === 'Orientation' && oriMap[val]) val = oriMap[val];
+        if (k === 'ExposureTime' && val > 0 && val < 1) val = `1/${Math.round(1/val)}s`;
+        else if (k === 'ExposureTime') val = `${val}s`;
+        if (k === 'FNumber') val = `f/${val}`;
+        if (k === 'FocalLength') val = `${val}mm`;
+        return `<div class="exif-item">
+          <div class="exif-label">${displayMap[k]}</div>
+          <div class="exif-value">${val}</div>
+        </div>`;
+      }).join('');
+
+      exifContent.innerHTML = `<div class="exif-grid">${html}</div>`;
+    }
+
+    exifSection.classList.add('visible');
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     EVENTS: Drop Zone — click to open file picker
+  ───────────────────────────────────────────────────────────── */
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') fileInput.click();
+  });
+
+  /* ─────────────────────────────────────────────────────────────
+     EVENTS: Drag & Drop
+  ───────────────────────────────────────────────────────────── */
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+    document.getElementById('drop-icon').textContent = '📥';
+  });
+
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+    document.getElementById('drop-icon').textContent = '🖼️';
+  });
+
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    document.getElementById('drop-icon').textContent = '🖼️';
+    const file = e.dataTransfer.files[0];
+    handleFile(file);
+  });
+
+  /* ─────────────────────────────────────────────────────────────
+     EVENTS: File input change
+  ───────────────────────────────────────────────────────────── */
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+  });
+
+  /* ─────────────────────────────────────────────────────────────
+     EVENTS: Paste image (Ctrl+V)
+  ───────────────────────────────────────────────────────────── */
+  document.addEventListener('paste', e => {
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (const item of items) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) { handleFile(file); break; }
+      }
+    }
+  });
+
+  /* ─────────────────────────────────────────────────────────────
+     EVENTS: Clear button
+  ───────────────────────────────────────────────────────────── */
+  clearBtn.addEventListener('click', clearImage);
+
+  /* ─────────────────────────────────────────────────────────────
+     EVENTS: Engine buttons
+  ───────────────────────────────────────────────────────────── */
+  btnGoogle.addEventListener('click', searchGoogle);
+  btnYandex.addEventListener('click', searchYandex);
+  btnAll.addEventListener('click',    searchAll);
+</script>
+</body>
+</html>
