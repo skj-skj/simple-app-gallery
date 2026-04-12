@@ -14,6 +14,11 @@ const APPS = [
     title: "Lens - Reverse Image Search Hub",
     description: "Simple tool to reverse image search on google and yandex",
     tags: ["search", "image", "google", "yandex"]
+  },{
+    dir: "apps/call",
+    title: "P2P Calling",
+    description: "Simple p2p calling tool",
+    tags: ["webrtc", "peerjs", "p2p", "call"]
   },
 
 ];

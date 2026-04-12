@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoiceLink — Private P2P Calls</title>
+
+<!-- PeerJS: WebRTC abstraction that handles signaling via a public server -->
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<!-- QRCode.js: Client-side QR code generation, zero network calls -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --bg-card: #12121a;
+    --bg-card2: #1a1a26;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #f0f0f5;
+    --text-muted: #888899;
+    --text-dim: #555566;
+    --accent: #7c6fff;
+    --accent-dim: rgba(124,111,255,0.15);
+    --accent-glow: rgba(124,111,255,0.3);
+    --green: #3dd68c;
+    --green-dim: rgba(61,214,140,0.15);
+    --red: #ff5c6e;
+    --red-dim: rgba(255,92,110,0.15);
+    --amber: #ffb547;
+    --amber-dim: rgba(255,181,71,0.15);
+    --radius: 14px;
+    --radius-sm: 8px;
+    --shadow: 0 2px 24px rgba(0,0,0,0.5);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 16px 48px;
+  }
+
+  /* ─── Header ─── */
+  header {
+    width: 100%;
+    max-width: 480px;
+    padding: 28px 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-glow);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .logo-icon svg { color: var(--accent); }
+  .logo h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+  .privacy-badge {
+    font-size: 11px;
+    color: var(--green);
+    background: var(--green-dim);
+    border: 1px solid rgba(61,214,140,0.2);
+    border-radius: 20px;
+    padding: 3px 10px;
+    letter-spacing: 0.2px;
+  }
+
+  /* ─── Cards ─── */
+  main {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .card-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+  }
+
+  /* ─── Status pill ─── */
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+    margin-bottom: 16px;
+  }
+  .status-pill .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .status-pill.connecting { color: var(--amber); background: var(--amber-dim); border: 1px solid rgba(255,181,71,0.2); }
+  .status-pill.ready     { color: var(--green); background: var(--green-dim); border: 1px solid rgba(61,214,140,0.2); }
+  .status-pill.in-call   { color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent-glow); }
+  .status-pill.error     { color: var(--red);   background: var(--red-dim);   border: 1px solid rgba(255,92,110,0.2); }
+
+  /* ─── Your ID section ─── */
+  .id-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-card2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', monospace;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--accent);
+  }
+  .id-text { flex: 1; }
+  .copy-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: var(--text-muted);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s, background 0.15s;
+  }
+  .copy-btn:hover { color: var(--text); background: var(--border); }
+  .copy-btn.copied { color: var(--green); }
+
+  /* QR Code */
+  .qr-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: 12px;
+    width: fit-content;
+    user-select: none;
+  }
+  .qr-toggle:hover { color: var(--text); }
+  .qr-toggle svg { transition: transform 0.2s; }
+  .qr-toggle.open svg { transform: rotate(180deg); }
+
+  .qr-wrap {
+    display: none;
+    margin-top: 16px;
+    align-items: center;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .qr-wrap.visible { display: flex; }
+  #qr-code {
+    background: #fff;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+  }
+  #qr-code canvas, #qr-code img { display: block; }
+  .qr-hint { font-size: 12px; color: var(--text-dim); }
+
+  /* ─── Call Someone ─── */
+  .input-group {
+    display: flex;
+    gap: 8px;
+  }
+  input[type="text"] {
+    flex: 1;
+    background: var(--bg-card2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 15px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    letter-spacing: 0.5px;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+  input[type="text"]::placeholder { color: var(--text-dim); letter-spacing: 0; font-family: inherit; font-size: 14px; }
+  input[type="text"].invalid { border-color: var(--red); }
+
+  /* Buttons */
+  .btn {
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 18px;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { opacity: 0.88; }
+  .btn-danger  { background: var(--red);   color: #fff; }
+  .btn-danger:hover:not(:disabled)  { opacity: 0.88; }
+  .btn-ghost   { background: var(--bg-card2); border: 1px solid var(--border2); color: var(--text); }
+  .btn-ghost:hover:not(:disabled)   { border-color: var(--border2); background: var(--border); }
+  .btn-green   { background: var(--green); color: #0a0a0f; }
+  .btn-green:hover:not(:disabled)   { opacity: 0.88; }
+  .btn-full { width: 100%; justify-content: center; }
+
+  .error-hint { font-size: 12px; color: var(--red); margin-top: 6px; display: none; }
+  .error-hint.show { display: block; }
+
+  /* ─── In-call controls ─── */
+  #call-controls { display: none; }
+  #call-controls.visible { display: block; }
+
+  .call-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    border: 2px solid var(--accent-glow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0px;
+    text-align: center;
+    line-height: 1.2;
+    word-break: break-all;
+    padding: 4px;
+  }
+  .call-peer-id { font-family: monospace; font-size: 14px; color: var(--text-muted); }
+  .call-timer { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); margin-top: 2px; }
+
+  .controls-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  /* Mute button toggle states */
+  .btn-mute.muted { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+
+  /* ─── Incoming call modal ─── */
+  #modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(4px);
+  }
+  #modal-backdrop.visible { display: flex; }
+  .modal {
+    background: var(--bg-card);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+    animation: popIn 0.2s ease;
+  }
+  @keyframes popIn {
+    from { transform: scale(0.92); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+  .modal-icon {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: var(--green-dim);
+    border: 2px solid rgba(61,214,140,0.3);
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: ring 1.2s ease-in-out infinite;
+  }
+  @keyframes ring {
+    0%,100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(61,214,140,0.4); }
+    50%      { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(61,214,140,0); }
+  }
+  .modal h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  .modal .caller-id {
+    font-family: monospace;
+    font-size: 16px;
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: 6px 14px;
+    border-radius: 6px;
+    display: inline-block;
+    margin: 10px 0 20px;
+  }
+  .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* ─── Permission denied ─── */
+  .mic-denied {
+    display: none;
+    background: var(--red-dim);
+    border: 1px solid rgba(255,92,110,0.2);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--red);
+    margin-top: 10px;
+  }
+  .mic-denied.show { display: block; }
+
+  /* ─── Footer ─── */
+  footer {
+    max-width: 480px;
+    width: 100%;
+    margin-top: 24px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.8;
+  }
+  footer a { color: var(--text-muted); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+
+  /* WebRTC unsupported */
+  #no-webrtc {
+    display: none;
+    background: var(--red-dim);
+    border: 1px solid rgba(255,92,110,0.25);
+    border-radius: var(--radius);
+    padding: 24px;
+    text-align: center;
+    color: var(--red);
+    max-width: 480px;
+    width: 100%;
+    margin-top: 40px;
+  }
+  #no-webrtc h2 { font-size: 17px; margin-bottom: 8px; }
+  #no-webrtc p  { font-size: 13px; color: var(--text-muted); }
+
+  @media (max-width: 400px) {
+    .controls-row { grid-template-columns: 1fr; }
+    .modal-actions { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─────────────────────────────────────────────
+     WebRTC not supported fallback
+───────────────────────────────────────────── -->
+<div id="no-webrtc">
+  <h2>WebRTC not supported</h2>
+  <p>Your browser does not support WebRTC, which is required for P2P voice calls.<br>
+     Try Chrome, Firefox, Safari 12+, or Edge.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────
+     Incoming call modal
+───────────────────────────────────────────── -->
+<div id="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <div class="modal-icon">
+      <!-- Phone ringing icon (pure SVG, no emoji) -->
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3dd68c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+      </svg>
+    </div>
+    <h2 id="modal-title">Incoming call</h2>
+    <p style="color:var(--text-muted);font-size:13px;">from</p>
+    <div class="caller-id" id="modal-caller-id">—</div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" onclick="App.rejectCall()">
+        <!-- X icon -->
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Reject
+      </button>
+      <button class="btn btn-green" onclick="App.acceptCall()">
+        <!-- Check icon -->
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Accept
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────────
+     Header
+───────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 015.11 15a19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+      </svg>
+    </div>
+    <h1>VoiceLink</h1>
+  </div>
+  <span class="privacy-badge">No data stored</span>
+</header>
+
+<!-- ─────────────────────────────────────────────
+     Main content
+───────────────────────────────────────────── -->
+<main id="app-main">
+
+  <!-- ── Card 1: Your ID ── -->
+  <div class="card">
+    <div class="card-label">Your ID</div>
+
+    <!-- Connection status pill -->
+    <div id="status-pill" class="status-pill connecting">
+      <span class="dot"></span>
+      <span id="status-text">Connecting to network…</span>
+    </div>
+
+    <!-- IP-style ID display -->
+    <div class="id-row">
+      <span class="id-text" id="my-id">—.—.—.—</span>
+      <button class="copy-btn" id="copy-btn" title="Copy ID" onclick="App.copyId()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- QR toggle -->
+    <div class="qr-toggle" id="qr-toggle" onclick="App.toggleQr()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+      </svg>
+      Show QR code
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="qr-wrap" id="qr-wrap">
+      <div id="qr-code"></div>
+      <p class="qr-hint">Scan to share your ID</p>
+    </div>
+  </div>
+
+  <!-- ── Card 2: Call someone ── -->
+  <div class="card">
+    <div class="card-label">Call Someone</div>
+    <div class="input-group">
+      <input
+        type="text"
+        id="peer-input"
+        placeholder="Enter peer ID (e.g. 192.168.1.1)"
+        maxlength="15"
+        autocomplete="off"
+        spellcheck="false"
+        oninput="App.onPeerInput(this)"
+        onkeydown="if(event.key==='Enter')App.startCall()"
+      >
+      <button class="btn btn-primary" id="call-btn" onclick="App.startCall()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 015.11 15a19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+        </svg>
+        Call
+      </button>
+    </div>
+    <div class="error-hint" id="input-error">Please enter a valid ID (e.g. 123.45.67.89)</div>
+    <div class="mic-denied" id="mic-denied">
+      Microphone access was denied. Please allow microphone access in your browser settings and refresh the page.
+    </div>
+  </div>
+
+  <!-- ── Card 3: Active call controls ── -->
+  <div class="card" id="call-controls">
+    <div class="card-label">Active Call</div>
+    <div class="call-info">
+      <div class="avatar" id="call-avatar">—</div>
+      <div>
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:2px;">Connected with</div>
+        <div class="call-peer-id" id="call-peer-label">—</div>
+        <div class="call-timer" id="call-timer">0:00</div>
+      </div>
+    </div>
+    <div class="controls-row">
+      <button class="btn btn-ghost btn-mute" id="mute-btn" onclick="App.toggleMute()">
+        <!-- Mic icon -->
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        Mute
+      </button>
+      <button class="btn btn-danger" onclick="App.endCall()">
+        <!-- Phone off icon -->
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.68 13.31a16 16 0 003.41 2.6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.73 19.73 0 01-3.33-2.67m-2.67-3.34a19.79 19.79 0 01-3.07-8.63A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91"/>
+          <line x1="23" y1="1" x2="1" y2="23"/>
+        </svg>
+        End Call
+      </button>
+    </div>
+  </div>
+
+</main>
+
+<!-- ─────────────────────────────────────────────
+     Footer
+───────────────────────────────────────────── -->
+<footer>
+  <p>VoiceLink uses WebRTC for direct peer-to-peer voice calls.</p>
+  <p>No data is stored, tracked, or logged. Your ID resets on every page load.</p>
+  <p style="margin-top:8px;color:var(--text-dim);">
+    Signaling via <a href="https://peerjs.com" target="_blank" rel="noopener">PeerJS</a> public server &nbsp;·&nbsp;
+    <a href="https://github.com" target="_blank" rel="noopener">Deploy on GitHub Pages</a>
+  </p>
+</footer>
+
+<!-- Hidden audio element: plays the remote peer's audio stream -->
+<audio id="remote-audio" autoplay playsinline></audio>
+
+<!-- ─────────────────────────────────────────────
+     Ringtone: generated with Web Audio API
+     (no external file needed — pure client-side)
+───────────────────────────────────────────── -->
+<script>
+"use strict";
+
+/* ════════════════════════════════════════════════════
+   UTILITIES
+════════════════════════════════════════════════════ */
+
+/**
+ * generatePeerId()
+ * Creates a random IP-like ID: each octet is 0–255.
+ * This is the user's ephemeral identity — not stored permanently.
+ */
+function generatePeerId() {
+  const oct = () => Math.floor(Math.random() * 256);
+  return `${oct()}.${oct()}.${oct()}.${oct()}`;
+}
+
+/**
+ * isValidPeerId(id)
+ * Validates that a string looks like an IPv4 address.
+ * Each segment: 0–255, dot-separated.
+ */
+function isValidPeerId(id) {
+  const parts = (id || '').split('.');
+  if (parts.length !== 4) return false;
+  return parts.every(p => /^\d+$/.test(p) && +p >= 0 && +p <= 255);
+}
+
+/** Format seconds as M:SS for the call timer */
+function formatTime(s) {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/* ════════════════════════════════════════════════════
+   RINGTONE  (Web Audio API — no external files)
+════════════════════════════════════════════════════ */
+let ringtoneCtx = null, ringtoneInterval = null;
+
+function playRingtone() {
+  stopRingtone();
+  const playBeep = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      ringtoneCtx = ctx;
+      // Two-tone ring: 480 Hz + 620 Hz, classic telephone
+      [480, 620].forEach(freq => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = freq;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.18, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.9);
+      });
+    } catch(e) { /* audio ctx blocked — silently ignore */ }
+  };
+  playBeep();
+  ringtoneInterval = setInterval(playBeep, 2500);
+}
+
+function stopRingtone() {
+  if (ringtoneInterval) { clearInterval(ringtoneInterval); ringtoneInterval = null; }
+  if (ringtoneCtx) { try { ringtoneCtx.close(); } catch(e){} ringtoneCtx = null; }
+}
+
+/* ════════════════════════════════════════════════════
+   QR CODE
+════════════════════════════════════════════════════ */
+let qrGenerated = false;
+
+function generateQR(text) {
+  const el = document.getElementById('qr-code');
+  el.innerHTML = '';
+  // QRCode.js renders synchronously into the target element
+  new QRCode(el, {
+    text,
+    width: 180,
+    height: 180,
+    colorDark: '#1a1a26',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+  qrGenerated = true;
+}
+
+/* ════════════════════════════════════════════════════
+   PEERJS + WEBRTC FLOW
+   ──────────────────────────────────────────────────
+   How it works:
+   1. On load, we create a Peer with our IP-like ID.
+      PeerJS connects to its public signaling server (via WebSocket).
+      The signaling server helps peers find each other — after the
+      WebRTC handshake, audio travels directly P2P (STUN only).
+   2. CALLER: peer.call(remoteId, localStream) → sends an offer
+      via PeerJS signaling. PeerJS exchanges SDP + ICE candidates.
+   3. CALLEE: peer.on('call', handler) fires. We display the
+      incoming call modal. On accept, call.answer(localStream).
+   4. Both sides receive 'call.on("stream")' → pipe to <audio>.
+   5. On hang-up or disconnect, cleanup streams and UI.
+════════════════════════════════════════════════════ */
+
+const App = (() => {
+  let peer = null;           // PeerJS Peer instance
+  let myId = null;           // Our ephemeral IP-like ID
+  let localStream = null;    // getUserMedia audio stream
+  let activeCall = null;     // Current MediaConnection
+  let pendingCall = null;    // Incoming call waiting for user decision
+  let isMuted = false;
+  let timerInterval = null;
+  let callSeconds = 0;
+
+  /* ── UI helpers ── */
+  const $ = id => document.getElementById(id);
+
+  function setStatus(state, text) {
+    const pill = $('status-pill');
+    pill.className = `status-pill ${state}`;
+    $('status-text').textContent = text;
+  }
+
+  function showCallControls(peerId) {
+    $('call-controls').classList.add('visible');
+    $('call-peer-label').textContent = peerId;
+    // Abbreviate ID for avatar display
+    $('call-avatar').textContent = peerId.split('.').slice(0,2).join('.');
+    // Start call timer
+    callSeconds = 0;
+    $('call-timer').textContent = '0:00';
+    timerInterval = setInterval(() => {
+      callSeconds++;
+      $('call-timer').textContent = formatTime(callSeconds);
+    }, 1000);
+  }
+
+  function hideCallControls() {
+    $('call-controls').classList.remove('visible');
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    isMuted = false;
+    const muteBtn = $('mute-btn');
+    muteBtn.classList.remove('muted');
+    muteBtn.innerHTML = muteBtn.innerHTML.replace('Unmute', 'Mute');
+  }
+
+  function showModal(callerId) {
+    $('modal-caller-id').textContent = callerId;
+    $('modal-backdrop').classList.add('visible');
+    playRingtone();
+  }
+
+  function hideModal() {
+    $('modal-backdrop').classList.remove('visible');
+    stopRingtone();
+  }
+
+  /* ── Audio stream management ── */
+  function attachRemoteStream(stream) {
+    const audio = $('remote-audio');
+    audio.srcObject = stream;
+    // Some browsers need an explicit play() after setting srcObject
+    audio.play().catch(() => {});
+  }
+
+  function releaseLocalStream() {
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+      localStream = null;
+    }
+  }
+
+  /**
+   * getMic()
+   * Requests microphone access. Returns a Promise<MediaStream>.
+   * Audio-only — no video requested.
+   */
+  async function getMic() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      $('mic-denied').classList.remove('show');
+      return stream;
+    } catch(e) {
+      $('mic-denied').classList.add('show');
+      throw e;
+    }
+  }
+
+  /**
+   * handleIncomingStream(call)
+   * Wires up a connected call's stream to the remote audio element
+   * and listens for disconnection events.
+   */
+  function handleIncomingStream(call) {
+    activeCall = call;
+
+    call.on('stream', stream => {
+      attachRemoteStream(stream);
+      setStatus('in-call', 'Connected');
+      showCallControls(call.peer);
+    });
+
+    call.on('close', () => {
+      setStatus('ready', 'Waiting for connection…');
+      hideCallControls();
+      releaseLocalStream();
+      activeCall = null;
+    });
+
+    call.on('error', err => {
+      console.warn('Call error:', err);
+      setStatus('ready', 'Waiting for connection…');
+      hideCallControls();
+      releaseLocalStream();
+      activeCall = null;
+    });
+  }
+
+  /* ── PeerJS initialization ── */
+  function initPeer(id) {
+    /**
+     * PeerJS connects to its hosted public signaling server.
+     * Signaling is only used for the initial handshake (SDP exchange).
+     * After that, audio flows directly between peers via WebRTC.
+     *
+     * STUN server: Google's public STUN (stun.l.google.com:19302).
+     * TURN: not used — we rely on direct P2P; behind very restrictive
+     * NATs the call may fail, but this keeps us dependency-free.
+     */
+    peer = new Peer(id, {
+      debug: 0,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      }
+    });
+
+    peer.on('open', openId => {
+      myId = openId;
+      $('my-id').textContent = openId;
+      setStatus('ready', 'Waiting for connection…');
+      generateQR(openId);
+    });
+
+    peer.on('error', err => {
+      // ID already taken on the server — regenerate and retry
+      if (err.type === 'unavailable-id') {
+        console.warn('ID collision, regenerating…');
+        const newId = generatePeerId();
+        initPeer(newId);
+        return;
+      }
+      console.warn('Peer error:', err.type, err.message);
+      setStatus('error', 'Connection error — refresh to retry');
+    });
+
+    peer.on('disconnected', () => {
+      // PeerJS lost contact with the signaling server.
+      // Attempt automatic reconnect (up to PeerJS's internal limit).
+      setStatus('connecting', 'Reconnecting…');
+      setTimeout(() => {
+        if (peer && !peer.destroyed) peer.reconnect();
+      }, 2000);
+    });
+
+    /**
+     * peer.on('call') — Incoming call handler
+     * PeerJS fires this when another peer calls our ID.
+     * We do NOT auto-answer — we show the modal first.
+     */
+    peer.on('call', incomingCall => {
+      // Reject if already in a call
+      if (activeCall) {
+        incomingCall.close();
+        return;
+      }
+      pendingCall = incomingCall;
+      showModal(incomingCall.peer);
+    });
+  }
+
+  /* ════════════════════════════════════════════════
+     PUBLIC INTERFACE — wired to HTML onclick attrs
+  ════════════════════════════════════════════════ */
+
+  /** Called when user clicks "Call" button */
+  async function startCall() {
+    const input = $('peer-input');
+    const targetId = input.value.trim();
+
+    if (!isValidPeerId(targetId)) {
+      input.classList.add('invalid');
+      $('input-error').classList.add('show');
+      return;
+    }
+
+    if (targetId === myId) {
+      $('input-error').textContent = 'You cannot call yourself.';
+      $('input-error').classList.add('show');
+      input.classList.add('invalid');
+      return;
+    }
+
+    input.classList.remove('invalid');
+    $('input-error').classList.remove('show');
+    $('call-btn').disabled = true;
+    setStatus('connecting', 'Calling…');
+
+    try {
+      localStream = await getMic();
+    } catch(e) {
+      $('call-btn').disabled = false;
+      setStatus('ready', 'Waiting for connection…');
+      return;
+    }
+
+    /**
+     * peer.call(targetId, localStream)
+     * Initiates a WebRTC offer to the target peer via PeerJS signaling.
+     * Under the hood: PeerJS sends an SDP offer → target responds with
+     * an SDP answer → ICE candidates are exchanged → P2P audio begins.
+     */
+    const call = peer.call(targetId, localStream);
+
+    if (!call) {
+      setStatus('error', 'Could not reach peer');
+      $('call-btn').disabled = false;
+      releaseLocalStream();
+      return;
+    }
+
+    // Timeout: if no stream within 20s, assume peer is unreachable
+    const timeout = setTimeout(() => {
+      if (!activeCall) {
+        call.close();
+        setStatus('ready', 'Waiting for connection…');
+        hideCallControls();
+        releaseLocalStream();
+        $('call-btn').disabled = false;
+      }
+    }, 20000);
+
+    call.on('stream', stream => {
+      clearTimeout(timeout);
+      $('call-btn').disabled = false;
+      attachRemoteStream(stream);
+      setStatus('in-call', 'Connected');
+      showCallControls(targetId);
+      activeCall = call;
+    });
+
+    call.on('close', () => {
+      clearTimeout(timeout);
+      $('call-btn').disabled = false;
+      setStatus('ready', 'Waiting for connection…');
+      hideCallControls();
+      releaseLocalStream();
+      activeCall = null;
+    });
+
+    call.on('error', err => {
+      clearTimeout(timeout);
+      console.warn('Outbound call error:', err);
+      $('call-btn').disabled = false;
+      setStatus('ready', 'Call failed — try again');
+      hideCallControls();
+      releaseLocalStream();
+      activeCall = null;
+    });
+  }
+
+  /** Called when user accepts an incoming call */
+  async function acceptCall() {
+    hideModal();
+    if (!pendingCall) return;
+
+    try {
+      localStream = await getMic();
+    } catch(e) {
+      pendingCall.close();
+      pendingCall = null;
+      return;
+    }
+
+    // call.answer(stream) sends our SDP answer back to the caller.
+    // PeerJS completes the ICE negotiation and fires 'stream' on success.
+    pendingCall.answer(localStream);
+    handleIncomingStream(pendingCall);
+    pendingCall = null;
+  }
+
+  /** Called when user rejects an incoming call */
+  function rejectCall() {
+    hideModal();
+    if (pendingCall) { pendingCall.close(); pendingCall = null; }
+  }
+
+  /** End the active call */
+  function endCall() {
+    if (activeCall) { activeCall.close(); activeCall = null; }
+    setStatus('ready', 'Waiting for connection…');
+    hideCallControls();
+    releaseLocalStream();
+    $('call-btn').disabled = false;
+  }
+
+  /** Toggle microphone mute */
+  function toggleMute() {
+    if (!localStream) return;
+    isMuted = !isMuted;
+    localStream.getAudioTracks().forEach(t => { t.enabled = !isMuted; });
+    const btn = $('mute-btn');
+    btn.classList.toggle('muted', isMuted);
+    btn.querySelector('svg + text, svg').parentNode.lastChild.textContent = '';
+    // Rebuild button label
+    btn.innerHTML = isMuted
+      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2a7 7 0 01-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Unmute`
+      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Mute`;
+  }
+
+  /** Copy own ID to clipboard */
+  function copyId() {
+    if (!myId) return;
+    navigator.clipboard.writeText(myId).then(() => {
+      const btn = $('copy-btn');
+      btn.classList.add('copied');
+      setTimeout(() => btn.classList.remove('copied'), 1800);
+    }).catch(() => {
+      // Fallback for older browsers
+      const el = document.createElement('textarea');
+      el.value = myId;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    });
+  }
+
+  /** Toggle QR code visibility */
+  function toggleQr() {
+    const wrap = $('qr-wrap');
+    const toggle = $('qr-toggle');
+    const isOpen = wrap.classList.toggle('visible');
+    toggle.classList.toggle('open', isOpen);
+    toggle.childNodes[2].textContent = isOpen ? ' Hide QR code' : ' Show QR code';
+  }
+
+  /** Live-validate the peer input field */
+  function onPeerInput(el) {
+    const val = el.value.trim();
+    if (!val) {
+      el.classList.remove('invalid');
+      $('input-error').classList.remove('show');
+      return;
+    }
+    // Allow partial input while typing
+    const parts = val.split('.');
+    const partial = parts.length < 4 || (parts.length === 4 && val.endsWith('.'));
+    if (partial || isValidPeerId(val)) {
+      el.classList.remove('invalid');
+      $('input-error').classList.remove('show');
+    } else {
+      el.classList.add('invalid');
+      $('input-error').textContent = 'Please enter a valid ID (e.g. 123.45.67.89)';
+      $('input-error').classList.add('show');
+    }
+  }
+
+  /* ── Boot ── */
+  function init() {
+    // Check WebRTC support
+    if (!window.RTCPeerConnection || !navigator.mediaDevices) {
+      $('no-webrtc').style.display = 'block';
+      $('app-main').style.display = 'none';
+      document.querySelector('header').style.display = 'none';
+      return;
+    }
+
+    // Generate ephemeral IP-like ID on every page load
+    const id = generatePeerId();
+    $('my-id').textContent = id;
+    initPeer(id);
+  }
+
+  init();
+
+  // Expose methods used by inline onclick handlers
+  return { startCall, acceptCall, rejectCall, endCall, toggleMute, copyId, toggleQr, onPeerInput };
+})();
+</script>
+
+</body>
+</html>
