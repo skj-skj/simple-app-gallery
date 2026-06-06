@@ -21,9 +21,9 @@ const APPS = [
     tags: ["webrtc", "peerjs", "p2p", "call"]
   },{
     dir: "apps/fragmented-art-editor",
-    title: "Fragmented Art Editor",
-    description: "Simple Fragmented Art Editor",
-    tags: ["art", "p5.js", "fragmented-art", "p5js"]
+    title: "Fragment Wall Designer",
+    description: "a Simple Fragment Wall Designer - Fragmented Art Editor",
+    tags: ["art", "p5.js", "fragmented-art", "p5js", "designer", "editor", "fragment-wall"]
   }
 
 ];
