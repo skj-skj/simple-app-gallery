@@ -1,0 +1,1626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fragment Wall Art Designer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #0a0a0c;
+    --panel: #111116;
+    --panel2: #16161e;
+    --border: #252530;
+    --border2: #2e2e3e;
+    --accent: #e8ff57;
+    --accent2: #57ffd8;
+    --accent3: #ff6b57;
+    --text: #e4e4ec;
+    --text-dim: #6a6a7e;
+    --text-muted: #3a3a50;
+    --input-bg: #0e0e14;
+    --slider-track: #1e1e28;
+    --shadow: 0 4px 24px rgba(0,0,0,0.6);
+    --radius: 6px;
+    --font-mono: 'Space Mono', monospace;
+    --font-display: 'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    overflow: hidden;
+  }
+
+  #app {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    width: 280px;
+    min-width: 280px;
+    height: 100vh;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 10;
+  }
+
+  #sidebar-header {
+    padding: 18px 16px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #sidebar-header h1 {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  #sidebar-header p {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 3px;
+    letter-spacing: 0.5px;
+  }
+
+  #sidebar-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 0 20px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border2) transparent;
+  }
+
+  #sidebar-scroll::-webkit-scrollbar { width: 4px; }
+  #sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+  #sidebar-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  /* ── SECTIONS ── */
+  .section {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-title {
+    font-family: var(--font-display);
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* ── UPLOAD ── */
+  #drop-zone {
+    border: 1.5px dashed var(--border2);
+    border-radius: var(--radius);
+    padding: 18px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--input-bg);
+    position: relative;
+  }
+
+  #drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(232,255,87,0.04);
+  }
+
+  #drop-zone svg { margin-bottom: 6px; opacity: 0.5; }
+  #drop-zone .dz-label { color: var(--text-dim); font-size: 11px; line-height: 1.5; }
+  #drop-zone .dz-hint { color: var(--text-muted); font-size: 10px; margin-top: 3px; }
+  #file-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+  #img-info { display: none; margin-top: 8px; }
+  #img-info .info-row {
+    display: flex; justify-content: space-between;
+    color: var(--text-dim); font-size: 10px; padding: 2px 0;
+  }
+  #img-info .info-val { color: var(--accent2); font-weight: 700; }
+
+  /* ── CONTROLS ── */
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    gap: 8px;
+  }
+
+  .ctrl-label {
+    color: var(--text-dim);
+    font-size: 10px;
+    flex: 1;
+    white-space: nowrap;
+  }
+
+  .ctrl-val {
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 42px;
+    text-align: right;
+  }
+
+  .slider-wrap {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+
+  .slider-wrap .ctrl-row { margin-bottom: 4px; }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--slider-track);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 0 0 2px rgba(232,255,87,0.2);
+    transition: box-shadow 0.1s;
+  }
+
+  input[type=range]::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 0 4px rgba(232,255,87,0.3);
+  }
+
+  input[type=range]::-moz-range-thumb {
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: none;
+  }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border2);
+    background: var(--panel2);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.12s;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(232,255,87,0.06); }
+  .btn:active { transform: scale(0.97); }
+
+  .btn-accent {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+  .btn-accent:hover { background: #f5ff80; color: #000; border-color: #f5ff80; }
+
+  .btn-danger { border-color: var(--accent3); color: var(--accent3); }
+  .btn-danger:hover { background: rgba(255,107,87,0.1); }
+
+  .btn-teal { border-color: var(--accent2); color: var(--accent2); }
+  .btn-teal:hover { background: rgba(87,255,216,0.07); }
+
+  .btn-sm { padding: 4px 8px; font-size: 10px; }
+  .btn-full { width: 100%; }
+
+  .btn-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+
+  .btn-grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+
+  /* ── CHECKBOXES ── */
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .check-row input[type=checkbox] {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border: 1.5px solid var(--border2);
+    border-radius: 3px;
+    background: var(--input-bg);
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: all 0.1s;
+  }
+
+  .check-row input[type=checkbox]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .check-row input[type=checkbox]:checked::after {
+    content: '';
+    position: absolute;
+    left: 3px; top: 1px;
+    width: 5px; height: 8px;
+    border: 2px solid #000;
+    border-top: none; border-left: none;
+    transform: rotate(45deg);
+  }
+
+  .check-row .check-label { color: var(--text-dim); font-size: 10px; }
+
+  /* ── NUMBER INPUT ── */
+  .num-input-row {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+  }
+
+  input[type=number] {
+    background: var(--input-bg);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 5px 8px;
+    width: 80px;
+    outline: none;
+    transition: border-color 0.1s;
+  }
+  input[type=number]:focus { border-color: var(--accent); }
+
+  /* ── STATS ── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .stat-card {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 7px 9px;
+  }
+
+  .stat-card .stat-label { color: var(--text-muted); font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 2px; }
+  .stat-card .stat-val { color: var(--accent); font-size: 14px; font-weight: 700; font-family: var(--font-display); }
+  .stat-card .stat-val.dim { color: var(--text-dim); }
+  .stat-card .stat-val.teal { color: var(--accent2); }
+  .stat-card .stat-val.red { color: var(--accent3); }
+
+  /* ── HISTORY ── */
+  .undo-redo-row {
+    display: flex; gap: 5px;
+  }
+
+  /* ── CANVAS AREA ── */
+  #canvas-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+    position: relative;
+  }
+
+  #canvas-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  #canvas-toolbar .toolbar-left { display: flex; align-items: center; gap: 6px; }
+  #canvas-toolbar .toolbar-right { display: flex; align-items: center; gap: 6px; }
+
+  .toolbar-label {
+    font-size: 10px; color: var(--text-dim);
+    border-right: 1px solid var(--border); padding-right: 8px; margin-right: 2px;
+  }
+
+  #canvas-wrapper {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: repeating-conic-gradient(#111116 0% 25%, #0d0d12 0% 50%) 0 0 / 24px 24px;
+  }
+
+  #canvas-wrapper canvas { display: block; }
+
+  #tooltip {
+    position: absolute;
+    background: rgba(10,10,12,0.92);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 5px 9px;
+    font-size: 10px;
+    color: var(--accent);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+    z-index: 100;
+    white-space: nowrap;
+  }
+
+  #no-image-msg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    pointer-events: none;
+  }
+
+  #no-image-msg .big-icon { font-size: 48px; opacity: 0.15; }
+  #no-image-msg p { color: var(--text-muted); font-size: 11px; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── PROGRESS / OVERLAY ── */
+  #progress-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  #progress-overlay.show { display: flex; }
+
+  #progress-bar-wrap {
+    width: 280px;
+    background: var(--panel2);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    overflow: hidden;
+    height: 6px;
+  }
+
+  #progress-bar {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.1s;
+  }
+
+  #progress-msg { color: var(--text-dim); font-size: 11px; }
+
+  .section-sep { height: 1px; background: var(--border); margin: 4px 0 10px; }
+
+  .kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    background: var(--panel2);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h1>Fragment<br>Wall Designer</h1>
+      <p>Modular Art Composer</p>
+    </div>
+    <div id="sidebar-scroll">
+
+      <!-- UPLOAD -->
+      <div class="section">
+        <div class="section-title">Image Source</div>
+        <div id="drop-zone">
+          <input type="file" id="file-input" accept=".png,.jpg,.jpeg,.webp">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div class="dz-label">Upload or Drop Image</div>
+          <div class="dz-hint">PNG · JPG · JPEG · WEBP</div>
+        </div>
+        <div id="img-info">
+          <div class="info-row"><span>Width</span><span class="info-val" id="info-w">—</span></div>
+          <div class="info-row"><span>Height</span><span class="info-val" id="info-h">—</span></div>
+        </div>
+      </div>
+
+      <!-- FRAGMENT SIZE -->
+      <div class="section">
+        <div class="section-title">Fragment Grid</div>
+        <div class="slider-wrap">
+          <div class="ctrl-row">
+            <span class="ctrl-label">Fragment Size</span>
+            <span class="ctrl-val" id="val-fsize">80px</span>
+          </div>
+          <input type="range" id="sl-fsize" min="20" max="300" value="80">
+        </div>
+        <div class="stat-grid" style="margin-top:4px">
+          <div class="stat-card"><div class="stat-label">Rows</div><div class="stat-val dim" id="st-rows">—</div></div>
+          <div class="stat-card"><div class="stat-label">Cols</div><div class="stat-val dim" id="st-cols">—</div></div>
+          <div class="stat-card" style="grid-column:1/-1"><div class="stat-label">Total Fragments</div><div class="stat-val dim" id="st-total">—</div></div>
+        </div>
+      </div>
+
+      <!-- FRAGMENT SELECTION -->
+      <div class="section">
+        <div class="section-title">Fragment Selection</div>
+        <div class="btn-grid">
+          <button class="btn btn-sm" id="btn-enable-all">Enable All <span class="kbd">E</span></button>
+          <button class="btn btn-sm btn-danger" id="btn-disable-all">Disable All <span class="kbd">D</span></button>
+        </div>
+        <div class="btn-grid">
+          <button class="btn btn-sm" id="btn-invert">Invert <span class="kbd">I</span></button>
+          <button class="btn btn-sm btn-teal" id="btn-silhouette">Silhouette</button>
+        </div>
+        <div class="btn-grid-3">
+          <button class="btn btn-sm" id="btn-rnd25">25%</button>
+          <button class="btn btn-sm" id="btn-rnd50">50%</button>
+          <button class="btn btn-sm" id="btn-rnd75">75%</button>
+        </div>
+        <div style="font-size:9px;color:var(--text-muted);margin-top:2px">Random Disable</div>
+      </div>
+
+      <!-- SPACING & GAP -->
+      <div class="section">
+        <div class="section-title">Position &amp; Spacing</div>
+
+        <div class="slider-wrap">
+          <div class="ctrl-row">
+            <span class="ctrl-label">Gap / Spacing</span>
+            <span class="ctrl-val" id="val-gap">10px</span>
+          </div>
+          <input type="range" id="sl-gap" min="0" max="150" value="10">
+        </div>
+
+        <div class="slider-wrap">
+          <div class="ctrl-row">
+            <span class="ctrl-label">Horizontal Offset</span>
+            <span class="ctrl-val" id="val-ox">0px</span>
+          </div>
+          <input type="range" id="sl-ox" min="-300" max="300" value="0">
+        </div>
+
+        <div class="slider-wrap">
+          <div class="ctrl-row">
+            <span class="ctrl-label">Vertical Offset</span>
+            <span class="ctrl-val" id="val-oy">0px</span>
+          </div>
+          <input type="range" id="sl-oy" min="-300" max="300" value="0">
+        </div>
+
+        <div class="slider-wrap">
+          <div class="ctrl-row">
+            <span class="ctrl-label">Alt Row Offset</span>
+            <span class="ctrl-val" id="val-altrow">0px</span>
+          </div>
+          <input type="range" id="sl-altrow" min="-200" max="200" value="0">
+        </div>
+
+        <div class="slider-wrap">
+          <div class="ctrl-row">
+            <span class="ctrl-label">Alt Col Offset</span>
+            <span class="ctrl-val" id="val-altcol">0px</span>
+          </div>
+          <input type="range" id="sl-altcol" min="-200" max="200" value="0">
+        </div>
+      </div>
+
+      <!-- JITTER -->
+      <div class="section">
+        <div class="section-title">Random Jitter</div>
+        <div class="slider-wrap">
+          <div class="ctrl-row">
+            <span class="ctrl-label">Jitter Amount</span>
+            <span class="ctrl-val" id="val-jitter">0px</span>
+          </div>
+          <input type="range" id="sl-jitter" min="0" max="100" value="0">
+        </div>
+        <div class="num-input-row">
+          <span class="ctrl-label">Seed</span>
+          <input type="number" id="inp-seed" value="42" min="0" max="99999">
+          <button class="btn btn-sm" id="btn-newseed">New</button>
+        </div>
+      </div>
+
+      <!-- SHAPE -->
+      <div class="section">
+        <div class="section-title">Fragment Shape</div>
+        <div class="slider-wrap">
+          <div class="ctrl-row">
+            <span class="ctrl-label">Corner Radius</span>
+            <span class="ctrl-val" id="val-radius">15%</span>
+          </div>
+          <input type="range" id="sl-radius" min="0" max="50" value="15">
+        </div>
+      </div>
+
+      <!-- GRID DISPLAY -->
+      <div class="section">
+        <div class="section-title">Grid Display</div>
+        <label class="check-row">
+          <input type="checkbox" id="chk-grid">
+          <span class="check-label">Show Grid</span>
+          <span class="kbd" style="margin-left:auto">G</span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" id="chk-numbers">
+          <span class="check-label">Show Fragment Numbers</span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" id="chk-labels">
+          <span class="check-label">Show Row/Col Labels</span>
+        </label>
+      </div>
+
+      <!-- STATS -->
+      <div class="section">
+        <div class="section-title">Statistics</div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-label">Img Width</div><div class="stat-val dim" id="st-imgw">—</div></div>
+          <div class="stat-card"><div class="stat-label">Img Height</div><div class="stat-val dim" id="st-imgh">—</div></div>
+          <div class="stat-card"><div class="stat-label">Enabled</div><div class="stat-val teal" id="st-enabled">—</div></div>
+          <div class="stat-card"><div class="stat-label">Disabled</div><div class="stat-val red" id="st-disabled">—</div></div>
+          <div class="stat-card"><div class="stat-label">% On</div><div class="stat-val teal" id="st-pct-on">—</div></div>
+          <div class="stat-card"><div class="stat-label">% Off</div><div class="stat-val red" id="st-pct-off">—</div></div>
+        </div>
+      </div>
+
+      <!-- HISTORY -->
+      <div class="section">
+        <div class="section-title">History</div>
+        <div class="undo-redo-row">
+          <button class="btn btn-sm" id="btn-undo" style="flex:1">↩ Undo <span class="kbd">⌃Z</span></button>
+          <button class="btn btn-sm" id="btn-redo" style="flex:1">↪ Redo <span class="kbd">⌃Y</span></button>
+        </div>
+      </div>
+
+      <!-- EXPORT -->
+      <div class="section">
+        <div class="section-title">Export &amp; Project</div>
+        <div class="btn-grid">
+          <button class="btn btn-sm btn-accent btn-full" id="btn-export-png">⬇ PNG</button>
+          <button class="btn btn-sm btn-full" id="btn-export-zip">⬇ ZIP</button>
+        </div>
+        <div class="btn-grid">
+          <button class="btn btn-sm btn-full" id="btn-save-proj">💾 Save</button>
+          <button class="btn btn-sm btn-full" id="btn-load-proj">📂 Load</button>
+        </div>
+        <input type="file" id="proj-file-input" accept=".json" style="display:none">
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CANVAS AREA -->
+  <div id="canvas-area">
+    <div id="canvas-toolbar">
+      <div class="toolbar-left">
+        <span class="toolbar-label">PREVIEW</span>
+        <button class="btn btn-sm" id="btn-undo-tb">↩</button>
+        <button class="btn btn-sm" id="btn-redo-tb">↪</button>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-sm" id="btn-tb-grid">Grid</button>
+        <button class="btn btn-sm btn-accent" id="btn-tb-export">Export PNG</button>
+      </div>
+    </div>
+    <div id="canvas-wrapper">
+      <div id="no-image-msg">
+        <div class="big-icon">⬡</div>
+        <p>Upload an image to begin</p>
+        <p style="font-size:10px;margin-top:4px">Drag &amp; drop or click the upload panel</p>
+      </div>
+      <div id="tooltip"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESS OVERLAY -->
+<div id="progress-overlay">
+  <div id="progress-msg">Processing…</div>
+  <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// CONFIGURATION
+// ═══════════════════════════════════════════════════════
+const CFG = {
+  HISTORY_LIMIT: 80,
+  MIN_FSIZE: 20, MAX_FSIZE: 300, DEF_FSIZE: 80,
+  MIN_GAP: 0, MAX_GAP: 150, DEF_GAP: 10,
+  MIN_OX: -300, MAX_OX: 300, DEF_OX: 0,
+  MIN_OY: -300, MAX_OY: 300, DEF_OY: 0,
+  MIN_ALTROW: -200, MAX_ALTROW: 200, DEF_ALTROW: 0,
+  MIN_ALTCOL: -200, MAX_ALTCOL: 200, DEF_ALTCOL: 0,
+  MIN_JITTER: 0, MAX_JITTER: 100, DEF_JITTER: 0,
+  MIN_RADIUS: 0, MAX_RADIUS: 50, DEF_RADIUS: 15,
+};
+
+// ═══════════════════════════════════════════════════════
+// STATE MANAGEMENT
+// ═══════════════════════════════════════════════════════
+const State = {
+  image: null,          // p5.Image
+  imageEl: null,        // HTMLImageElement
+  imgW: 0, imgH: 0,
+  fsize: CFG.DEF_FSIZE,
+  gap: CFG.DEF_GAP,
+  ox: CFG.DEF_OX, oy: CFG.DEF_OY,
+  altRow: CFG.DEF_ALTROW,
+  altCol: CFG.DEF_ALTCOL,
+  jitter: CFG.DEF_JITTER,
+  seed: 42,
+  radius: CFG.DEF_RADIUS,
+  showGrid: false,
+  showNumbers: false,
+  showLabels: false,
+  rows: 0, cols: 0,
+  fragments: [],        // [{row,col,enabled}]
+  history: [],
+  future: [],
+  hoveredFrag: null,
+  fragmentBuffers: [],  // off-screen p5.Graphics per fragment
+  dirty: true,
+};
+
+// ═══════════════════════════════════════════════════════
+// DETERMINISTIC SEEDED RANDOM
+// ═══════════════════════════════════════════════════════
+function seededRnd(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 4294967296;
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+// IMAGE PROCESSING
+// ═══════════════════════════════════════════════════════
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => resolve({ img, url });
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function computeEdgeScore(imageData, w, h, row, col, fsize) {
+  const sx = col * fsize, sy = row * fsize;
+  const ex = Math.min(sx + fsize, w), ey = Math.min(sy + fsize, h);
+  let score = 0;
+  for (let y = sy; y < ey - 1; y++) {
+    for (let x = sx; x < ex - 1; x++) {
+      const i = (y * w + x) * 4;
+      const dx = Math.abs(imageData[i] - imageData[(y * w + x + 1) * 4]) +
+                 Math.abs(imageData[i+1] - imageData[(y * w + x + 1) * 4 + 1]) +
+                 Math.abs(imageData[i+2] - imageData[(y * w + x + 1) * 4 + 2]);
+      const dy = Math.abs(imageData[i] - imageData[((y+1) * w + x) * 4]) +
+                 Math.abs(imageData[i+1] - imageData[((y+1) * w + x) * 4 + 1]) +
+                 Math.abs(imageData[i+2] - imageData[((y+1) * w + x) * 4 + 2]);
+      score += dx + dy;
+    }
+  }
+  const area = (ex - sx) * (ey - sy);
+  return area > 0 ? score / area : 0;
+}
+
+// ═══════════════════════════════════════════════════════
+// FRAGMENT GENERATION
+// ═══════════════════════════════════════════════════════
+function generateFragments() {
+  if (!State.imgW || !State.imgH) return;
+  State.rows = Math.ceil(State.imgH / State.fsize);
+  State.cols = Math.ceil(State.imgW / State.fsize);
+  const old = {};
+  State.fragments.forEach(f => { old[`${f.row}_${f.col}`] = f.enabled; });
+  State.fragments = [];
+  for (let r = 0; r < State.rows; r++) {
+    for (let c = 0; c < State.cols; c++) {
+      const key = `${r}_${c}`;
+      State.fragments.push({ row: r, col: c, enabled: old[key] !== undefined ? old[key] : true });
+    }
+  }
+  State.fragmentBuffers = [];
+  State.dirty = true;
+  updateStats();
+}
+
+function getFragment(r, c) {
+  return State.fragments.find(f => f.row === r && f.col === c);
+}
+
+// ═══════════════════════════════════════════════════════
+// HISTORY MANAGEMENT
+// ═══════════════════════════════════════════════════════
+function snapshotState() {
+  return State.fragments.map(f => f.enabled);
+}
+
+function pushHistory() {
+  State.history.push(snapshotState());
+  if (State.history.length > CFG.HISTORY_LIMIT) State.history.shift();
+  State.future = [];
+}
+
+function undo() {
+  if (!State.history.length) return;
+  State.future.push(snapshotState());
+  const snap = State.history.pop();
+  snap.forEach((en, i) => { if (State.fragments[i]) State.fragments[i].enabled = en; });
+  State.dirty = true;
+  updateStats();
+}
+
+function redo() {
+  if (!State.future.length) return;
+  State.history.push(snapshotState());
+  const snap = State.future.pop();
+  snap.forEach((en, i) => { if (State.fragments[i]) State.fragments[i].enabled = en; });
+  State.dirty = true;
+  updateStats();
+}
+
+// ═══════════════════════════════════════════════════════
+// STATISTICS
+// ═══════════════════════════════════════════════════════
+function updateStats() {
+  const total = State.fragments.length;
+  const enabled = State.fragments.filter(f => f.enabled).length;
+  const disabled = total - enabled;
+  const pctOn = total ? Math.round(enabled / total * 100) : 0;
+  const pctOff = 100 - pctOn;
+
+  document.getElementById('st-rows').textContent = State.rows || '—';
+  document.getElementById('st-cols').textContent = State.cols || '—';
+  document.getElementById('st-total').textContent = total || '—';
+  document.getElementById('st-enabled').textContent = total ? enabled : '—';
+  document.getElementById('st-disabled').textContent = total ? disabled : '—';
+  document.getElementById('st-pct-on').textContent = total ? pctOn + '%' : '—';
+  document.getElementById('st-pct-off').textContent = total ? pctOff + '%' : '—';
+  document.getElementById('st-imgw').textContent = State.imgW || '—';
+  document.getElementById('st-imgh').textContent = State.imgH || '—';
+  document.getElementById('info-w').textContent = State.imgW ? State.imgW + 'px' : '—';
+  document.getElementById('info-h').textContent = State.imgH ? State.imgH + 'px' : '—';
+}
+
+// ═══════════════════════════════════════════════════════
+// JITTER HELPER
+// ═══════════════════════════════════════════════════════
+function getJitter(r, c) {
+  if (!State.jitter) return { jx: 0, jy: 0 };
+  const rnd = seededRnd(State.seed * 1000 + r * 999 + c * 137);
+  const jx = (rnd() * 2 - 1) * State.jitter;
+  const jy = (rnd() * 2 - 1) * State.jitter;
+  return { jx, jy };
+}
+
+function getFragPos(r, c) {
+  const s = State.fsize;
+  const { jx, jy } = getJitter(r, c);
+  const altRowShift = (r % 2 === 1) ? State.altRow : 0;
+  const altColShift = (c % 2 === 1) ? State.altCol : 0;
+  const x = c * (s + State.gap) + State.ox + altRowShift + jx;
+  const y = r * (s + State.gap) + State.oy + altColShift + jy;
+  return { x, y };
+}
+
+// ═══════════════════════════════════════════════════════
+// P5.JS SKETCH
+// ═══════════════════════════════════════════════════════
+let p5inst = null;
+
+const sketch = (p) => {
+  let pg = null; // main offscreen graphics
+  let imgGraphics = null;
+
+  p.setup = function() {
+    const wrapper = document.getElementById('canvas-wrapper');
+    const cnv = p.createCanvas(wrapper.clientWidth, wrapper.clientHeight);
+    cnv.parent('canvas-wrapper');
+    cnv.style('display', 'block');
+    p.noLoop();
+    p.pixelDensity(1);
+  };
+
+  p.draw = function() {
+    p.background(10, 10, 12);
+    if (!State.image || !State.fragments.length) return;
+
+    const s = State.fsize;
+    const rad = Math.round((s * State.radius) / 100);
+    const hf = State.hoveredFrag;
+
+    for (let i = 0; i < State.fragments.length; i++) {
+      const frag = State.fragments[i];
+      const { x, y } = getFragPos(frag.row, frag.col);
+
+      // culling
+      if (x + s < -200 || y + s < -200 || x > p.width + 200 || y > p.height + 200) continue;
+
+      p.push();
+
+      if (rad > 0) {
+        p.noStroke();
+        // clip via mask technique: draw to temp graphics
+        const tmp = p.createGraphics(s, s);
+        tmp.pixelDensity(1);
+        tmp.clear();
+        tmp.noStroke();
+        tmp.fill(255);
+        tmp.rect(0, 0, s, s, rad);
+
+        if (frag.enabled && State.image) {
+          const srcX = frag.col * s;
+          const srcY = frag.row * s;
+          const srcW = Math.min(s, State.imgW - srcX);
+          const srcH = Math.min(s, State.imgH - srcY);
+          if (srcW > 0 && srcH > 0) {
+            tmp.blendMode(p.MULTIPLY);
+            tmp.image(State.image, 0, 0, s, s, srcX, srcY, srcW, srcH);
+          }
+        } else {
+          tmp.blendMode(p.MULTIPLY);
+          tmp.fill(0);
+          tmp.rect(0, 0, s, s, rad);
+          if (!frag.enabled) {
+            tmp.fill(0);
+            tmp.rect(0, 0, s, s);
+          }
+        }
+        tmp.blendMode(p.BLEND);
+
+        if (frag.enabled && State.image) {
+          // draw rounded clip with image
+          p.push();
+          p.translate(x, y);
+          p.noStroke();
+          p.fill(255);
+          p.rect(0, 0, s, s, rad);
+          p.drawingContext.save();
+          p.drawingContext.clip();
+          const srcX2 = frag.col * s;
+          const srcY2 = frag.row * s;
+          const srcW2 = Math.min(s, State.imgW - srcX2);
+          const srcH2 = Math.min(s, State.imgH - srcY2);
+          if (srcW2 > 0 && srcH2 > 0) {
+            p.image(State.image, 0, 0, s, s, srcX2, srcY2, srcW2, srcH2);
+          }
+          p.drawingContext.restore();
+          p.pop();
+        } else {
+          p.push();
+          p.translate(x, y);
+          p.noStroke();
+          p.fill(0, 0, 0);
+          p.rect(0, 0, s, s, rad);
+          p.pop();
+        }
+        tmp.remove();
+
+      } else {
+        // No radius – fast path
+        if (frag.enabled && State.image) {
+          const srcX = frag.col * s;
+          const srcY = frag.row * s;
+          const srcW = Math.min(s, State.imgW - srcX);
+          const srcH = Math.min(s, State.imgH - srcY);
+          if (srcW > 0 && srcH > 0) {
+            p.noStroke();
+            p.image(State.image, x, y, s, s, srcX, srcY, srcW, srcH);
+          }
+        } else {
+          p.noStroke();
+          p.fill(0);
+          p.rect(x, y, s, s);
+        }
+      }
+
+      // Grid overlay
+      if (State.showGrid) {
+        p.noFill();
+        p.stroke(232, 255, 87, 60);
+        p.strokeWeight(0.5);
+        p.rect(x, y, s, s, rad);
+      }
+
+      // Numbers
+      if (State.showNumbers && s >= 30) {
+        p.noStroke();
+        p.fill(255, 255, 255, 160);
+        p.textSize(Math.max(8, s * 0.18));
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textFont('Space Mono, monospace');
+        p.text(`${frag.row},${frag.col}`, x + s / 2, y + s / 2);
+      }
+
+      // Hover highlight
+      if (hf && hf.row === frag.row && hf.col === frag.col) {
+        p.noFill();
+        p.stroke(232, 255, 87, 220);
+        p.strokeWeight(2);
+        p.rect(x, y, s, s, rad);
+      }
+
+      p.pop();
+    }
+
+    // Row/Col labels
+    if (State.showLabels) {
+      p.textSize(9);
+      p.textFont('Space Mono, monospace');
+      p.fill(100, 100, 120);
+      p.noStroke();
+      for (let r = 0; r < State.rows; r++) {
+        const { y } = getFragPos(r, 0);
+        if (y >= -20 && y < p.height + 20) {
+          p.textAlign(p.RIGHT, p.CENTER);
+          p.text(`R${r}`, getFragPos(r, 0).x - 4, y + s / 2);
+        }
+      }
+      for (let c = 0; c < State.cols; c++) {
+        const { x } = getFragPos(0, c);
+        if (x >= -20 && x < p.width + 20) {
+          p.textAlign(p.CENTER, p.BOTTOM);
+          p.text(`C${c}`, x + s / 2, getFragPos(0, c).y - 4);
+        }
+      }
+    }
+  };
+
+  p.windowResized = function() {
+    const wrapper = document.getElementById('canvas-wrapper');
+    p.resizeCanvas(wrapper.clientWidth, wrapper.clientHeight);
+    State.dirty = true;
+    p.redraw();
+  };
+
+  p.mouseMoved = function() {
+    handleHover(p.mouseX, p.mouseY);
+  };
+
+  p.mouseClicked = function() {
+    if (p.mouseX < 0 || p.mouseY < 0 || p.mouseX > p.width || p.mouseY > p.height) return;
+    handleClick(p.mouseX, p.mouseY);
+  };
+};
+
+function initP5() {
+  if (p5inst) { p5inst.remove(); p5inst = null; }
+  p5inst = new p5(sketch);
+}
+
+function redrawCanvas() {
+  if (p5inst) p5inst.redraw();
+}
+
+// ═══════════════════════════════════════════════════════
+// INTERACTION – HOVER & CLICK
+// ═══════════════════════════════════════════════════════
+function hitTest(mx, my) {
+  if (!State.fragments.length) return null;
+  const s = State.fsize;
+  for (let i = State.fragments.length - 1; i >= 0; i--) {
+    const frag = State.fragments[i];
+    const { x, y } = getFragPos(frag.row, frag.col);
+    if (mx >= x && mx <= x + s && my >= y && my <= y + s) return frag;
+  }
+  return null;
+}
+
+function handleHover(mx, my) {
+  const frag = hitTest(mx, my);
+  const tooltip = document.getElementById('tooltip');
+  const wrapper = document.getElementById('canvas-wrapper');
+  const rect = wrapper.getBoundingClientRect();
+
+  if (frag) {
+    State.hoveredFrag = frag;
+    tooltip.style.opacity = '1';
+    tooltip.style.left = (p5inst.mouseX + 12) + 'px';
+    tooltip.style.top = (p5inst.mouseY - 8) + 'px';
+    tooltip.textContent = `Row ${frag.row} · Col ${frag.col} · ${frag.enabled ? 'ON' : 'OFF'}`;
+  } else {
+    State.hoveredFrag = null;
+    tooltip.style.opacity = '0';
+  }
+  redrawCanvas();
+}
+
+function handleClick(mx, my) {
+  const frag = hitTest(mx, my);
+  if (!frag) return;
+  pushHistory();
+  frag.enabled = !frag.enabled;
+  State.dirty = true;
+  updateStats();
+  redrawCanvas();
+}
+
+// ═══════════════════════════════════════════════════════
+// SILHOUETTE DETECTION
+// ═══════════════════════════════════════════════════════
+async function preserveSilhouette() {
+  if (!State.imageEl || !State.fragments.length) return;
+  showProgress('Analyzing image…', 0);
+
+  const w = State.imgW, h = State.imgH;
+  const offscreen = document.createElement('canvas');
+  offscreen.width = w; offscreen.height = h;
+  const ctx = offscreen.getContext('2d');
+  ctx.drawImage(State.imageEl, 0, 0);
+  const idata = ctx.getImageData(0, 0, w, h).data;
+
+  const scores = [];
+  for (let i = 0; i < State.fragments.length; i++) {
+    const f = State.fragments[i];
+    scores.push({ frag: f, score: computeEdgeScore(idata, w, h, f.row, f.col, State.fsize) });
+    if (i % 50 === 0) {
+      updateProgressBar(i / State.fragments.length * 80);
+      await yieldFrame();
+    }
+  }
+
+  const sorted = [...scores].sort((a, b) => b.score - a.score);
+  const keep = Math.round(sorted.length * 0.55);
+  const keepSet = new Set(sorted.slice(0, keep).map(s => `${s.frag.row}_${s.frag.col}`));
+
+  pushHistory();
+  State.fragments.forEach(f => {
+    f.enabled = keepSet.has(`${f.row}_${f.col}`);
+  });
+  updateProgressBar(100);
+  State.dirty = true;
+  updateStats();
+  redrawCanvas();
+  setTimeout(hideProgress, 400);
+}
+
+// ═══════════════════════════════════════════════════════
+// EXPORT UTILITIES
+// ═══════════════════════════════════════════════════════
+function renderToOffscreen(w, h) {
+  const cvs = document.createElement('canvas');
+  cvs.width = w; cvs.height = h;
+  const ctx = cvs.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, w, h);
+
+  const s = State.fsize;
+  const rad = Math.round((s * State.radius) / 100);
+
+  State.fragments.forEach(frag => {
+    const { x, y } = getFragPos(frag.row, frag.col);
+
+    ctx.save();
+    if (rad > 0) {
+      roundedClip(ctx, x, y, s, s, rad);
+    }
+
+    if (frag.enabled && State.imageEl) {
+      const srcX = frag.col * s;
+      const srcY = frag.row * s;
+      const srcW = Math.min(s, State.imgW - srcX);
+      const srcH = Math.min(s, State.imgH - srcY);
+      if (srcW > 0 && srcH > 0) {
+        ctx.drawImage(State.imageEl, srcX, srcY, srcW, srcH, x, y, s, s);
+      }
+    } else {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(x, y, s, s);
+    }
+    ctx.restore();
+  });
+
+  return cvs;
+}
+
+function roundedClip(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  ctx.clip();
+}
+
+function computeCompositionBounds() {
+  if (!State.fragments.length) return { minX: 0, minY: 0, maxX: 800, maxY: 600 };
+  const s = State.fsize;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  State.fragments.forEach(f => {
+    const { x, y } = getFragPos(f.row, f.col);
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + s);
+    maxY = Math.max(maxY, y + s);
+  });
+  return { minX, minY, maxX, maxY };
+}
+
+async function exportFullPNG() {
+  if (!State.imageEl) return;
+  showProgress('Rendering composition…', 0);
+  await yieldFrame();
+
+  const { minX, minY, maxX, maxY } = computeCompositionBounds();
+  const W = Math.ceil(maxX - minX) + 20;
+  const H = Math.ceil(maxY - minY) + 20;
+
+  const cvs = document.createElement('canvas');
+  cvs.width = W; cvs.height = H;
+  const ctx = cvs.getContext('2d');
+  ctx.fillStyle = '#0a0a0c';
+  ctx.fillRect(0, 0, W, H);
+
+  const s = State.fsize;
+  const rad = Math.round((s * State.radius) / 100);
+  const off = 10;
+
+  for (let i = 0; i < State.fragments.length; i++) {
+    const frag = State.fragments[i];
+    const { x, y } = getFragPos(frag.row, frag.col);
+    const dx = x - minX + off;
+    const dy = y - minY + off;
+
+    ctx.save();
+    if (rad > 0) roundedClip(ctx, dx, dy, s, s, rad);
+
+    if (frag.enabled && State.imageEl) {
+      const srcX = frag.col * s;
+      const srcY = frag.row * s;
+      const srcW = Math.min(s, State.imgW - srcX);
+      const srcH = Math.min(s, State.imgH - srcY);
+      if (srcW > 0 && srcH > 0) {
+        ctx.drawImage(State.imageEl, srcX, srcY, srcW, srcH, dx, dy, s, s);
+      }
+    } else {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(dx, dy, s, s);
+    }
+    ctx.restore();
+
+    if (i % 100 === 0) {
+      updateProgressBar(10 + (i / State.fragments.length) * 80);
+      await yieldFrame();
+    }
+  }
+
+  updateProgressBar(95);
+  await yieldFrame();
+  const blob = await new Promise(r => cvs.toBlob(r, 'image/png'));
+  downloadBlob(blob, 'fragment_composition.png');
+  updateProgressBar(100);
+  setTimeout(hideProgress, 400);
+}
+
+async function exportZIP() {
+  if (!State.imageEl) return;
+  showProgress('Building ZIP…', 0);
+  await yieldFrame();
+
+  const zip = new JSZip();
+  const s = State.fsize;
+  const rad = Math.round((s * State.radius) / 100);
+  const total = State.fragments.length;
+
+  for (let i = 0; i < total; i++) {
+    const frag = State.fragments[i];
+    const cvs = document.createElement('canvas');
+    cvs.width = s; cvs.height = s;
+    const ctx = cvs.getContext('2d');
+
+    ctx.save();
+    if (rad > 0) roundedClip(ctx, 0, 0, s, s, rad);
+
+    if (frag.enabled && State.imageEl) {
+      const srcX = frag.col * s;
+      const srcY = frag.row * s;
+      const srcW = Math.min(s, State.imgW - srcX);
+      const srcH = Math.min(s, State.imgH - srcY);
+      if (srcW > 0 && srcH > 0) {
+        ctx.drawImage(State.imageEl, srcX, srcY, srcW, srcH, 0, 0, s, s);
+      }
+    } else {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, s, s);
+    }
+    ctx.restore();
+
+    const blob = await new Promise(r => cvs.toBlob(r, 'image/png'));
+    const ab = await blob.arrayBuffer();
+    zip.file(`fragment_r${frag.row}_c${frag.col}.png`, ab);
+
+    if (i % 20 === 0) {
+      updateProgressBar(5 + (i / total) * 85);
+      await yieldFrame();
+    }
+  }
+
+  updateProgressBar(92);
+  const blob = await zip.generateAsync({ type: 'blob' }, meta => {
+    updateProgressBar(92 + meta.percent * 0.08);
+  });
+  downloadBlob(blob, 'fragments.zip');
+  updateProgressBar(100);
+  setTimeout(hideProgress, 400);
+}
+
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// ═══════════════════════════════════════════════════════
+// PROJECT SAVE / LOAD
+// ═══════════════════════════════════════════════════════
+function saveProject() {
+  const proj = {
+    version: 1,
+    imgW: State.imgW, imgH: State.imgH,
+    fsize: State.fsize, gap: State.gap,
+    ox: State.ox, oy: State.oy,
+    altRow: State.altRow, altCol: State.altCol,
+    jitter: State.jitter, seed: State.seed,
+    radius: State.radius,
+    showGrid: State.showGrid, showNumbers: State.showNumbers, showLabels: State.showLabels,
+    fragments: State.fragments.map(f => ({ row: f.row, col: f.col, enabled: f.enabled }))
+  };
+  const blob = new Blob([JSON.stringify(proj, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, 'fragment_project.json');
+}
+
+function loadProject(json) {
+  try {
+    const proj = JSON.parse(json);
+    State.fsize = proj.fsize || CFG.DEF_FSIZE;
+    State.gap = proj.gap ?? CFG.DEF_GAP;
+    State.ox = proj.ox ?? 0; State.oy = proj.oy ?? 0;
+    State.altRow = proj.altRow ?? 0; State.altCol = proj.altCol ?? 0;
+    State.jitter = proj.jitter ?? 0; State.seed = proj.seed ?? 42;
+    State.radius = proj.radius ?? CFG.DEF_RADIUS;
+    State.showGrid = proj.showGrid || false;
+    State.showNumbers = proj.showNumbers || false;
+    State.showLabels = proj.showLabels || false;
+    State.rows = proj.imgH ? Math.ceil(proj.imgH / State.fsize) : 0;
+    State.cols = proj.imgW ? Math.ceil(proj.imgW / State.fsize) : 0;
+
+    if (proj.fragments && proj.fragments.length) {
+      State.fragments = proj.fragments.map(f => ({ ...f }));
+    }
+
+    syncUIFromState();
+    State.dirty = true;
+    updateStats();
+    redrawCanvas();
+  } catch(e) {
+    alert('Failed to load project: ' + e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// PROGRESS OVERLAY
+// ═══════════════════════════════════════════════════════
+function showProgress(msg, pct) {
+  const ov = document.getElementById('progress-overlay');
+  document.getElementById('progress-msg').textContent = msg;
+  document.getElementById('progress-bar').style.width = (pct || 0) + '%';
+  ov.classList.add('show');
+}
+
+function updateProgressBar(pct) {
+  document.getElementById('progress-bar').style.width = Math.min(100, pct) + '%';
+}
+
+function hideProgress() {
+  document.getElementById('progress-overlay').classList.remove('show');
+}
+
+function yieldFrame() {
+  return new Promise(r => requestAnimationFrame(r));
+}
+
+// ═══════════════════════════════════════════════════════
+// UI SYNC
+// ═══════════════════════════════════════════════════════
+function syncUIFromState() {
+  setSliderVal('sl-fsize', 'val-fsize', State.fsize, 'px');
+  setSliderVal('sl-gap', 'val-gap', State.gap, 'px');
+  setSliderVal('sl-ox', 'val-ox', State.ox, 'px');
+  setSliderVal('sl-oy', 'val-oy', State.oy, 'px');
+  setSliderVal('sl-altrow', 'val-altrow', State.altRow, 'px');
+  setSliderVal('sl-altcol', 'val-altcol', State.altCol, 'px');
+  setSliderVal('sl-jitter', 'val-jitter', State.jitter, 'px');
+  setSliderVal('sl-radius', 'val-radius', State.radius, '%');
+  document.getElementById('inp-seed').value = State.seed;
+  document.getElementById('chk-grid').checked = State.showGrid;
+  document.getElementById('chk-numbers').checked = State.showNumbers;
+  document.getElementById('chk-labels').checked = State.showLabels;
+}
+
+function setSliderVal(sliderId, valId, val, unit) {
+  document.getElementById(sliderId).value = val;
+  document.getElementById(valId).textContent = val + unit;
+}
+
+// ═══════════════════════════════════════════════════════
+// UI WIRING
+// ═══════════════════════════════════════════════════════
+function wireUI() {
+  // Image upload
+  const fileInput = document.getElementById('file-input');
+  const dropZone = document.getElementById('drop-zone');
+
+  fileInput.addEventListener('change', e => {
+    if (e.target.files[0]) handleFileUpload(e.target.files[0]);
+  });
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileUpload(file);
+  });
+
+  // Fragment size
+  wireSlider('sl-fsize', 'val-fsize', 'px', val => {
+    State.fsize = val;
+    generateFragments();
+    redrawCanvas();
+  });
+
+  // Gap
+  wireSlider('sl-gap', 'val-gap', 'px', val => { State.gap = val; redrawCanvas(); });
+
+  // Offsets
+  wireSlider('sl-ox', 'val-ox', 'px', val => { State.ox = val; redrawCanvas(); });
+  wireSlider('sl-oy', 'val-oy', 'px', val => { State.oy = val; redrawCanvas(); });
+  wireSlider('sl-altrow', 'val-altrow', 'px', val => { State.altRow = val; redrawCanvas(); });
+  wireSlider('sl-altcol', 'val-altcol', 'px', val => { State.altCol = val; redrawCanvas(); });
+
+  // Jitter
+  wireSlider('sl-jitter', 'val-jitter', 'px', val => { State.jitter = val; redrawCanvas(); });
+
+  // Seed
+  document.getElementById('inp-seed').addEventListener('change', e => {
+    State.seed = parseInt(e.target.value) || 0;
+    redrawCanvas();
+  });
+  document.getElementById('btn-newseed').addEventListener('click', () => {
+    State.seed = Math.floor(Math.random() * 99999);
+    document.getElementById('inp-seed').value = State.seed;
+    redrawCanvas();
+  });
+
+  // Radius
+  wireSlider('sl-radius', 'val-radius', '%', val => { State.radius = val; redrawCanvas(); });
+
+  // Checkboxes
+  document.getElementById('chk-grid').addEventListener('change', e => { State.showGrid = e.target.checked; redrawCanvas(); });
+  document.getElementById('chk-numbers').addEventListener('change', e => { State.showNumbers = e.target.checked; redrawCanvas(); });
+  document.getElementById('chk-labels').addEventListener('change', e => { State.showLabels = e.target.checked; redrawCanvas(); });
+
+  // Bulk actions
+  document.getElementById('btn-enable-all').addEventListener('click', () => {
+    pushHistory();
+    State.fragments.forEach(f => f.enabled = true);
+    State.dirty = true; updateStats(); redrawCanvas();
+  });
+  document.getElementById('btn-disable-all').addEventListener('click', () => {
+    pushHistory();
+    State.fragments.forEach(f => f.enabled = false);
+    State.dirty = true; updateStats(); redrawCanvas();
+  });
+  document.getElementById('btn-invert').addEventListener('click', () => {
+    pushHistory();
+    State.fragments.forEach(f => f.enabled = !f.enabled);
+    State.dirty = true; updateStats(); redrawCanvas();
+  });
+  document.getElementById('btn-silhouette').addEventListener('click', preserveSilhouette);
+
+  function randomDisable(pct) {
+    if (!State.fragments.length) return;
+    pushHistory();
+    const rnd = seededRnd(State.seed + Date.now());
+    State.fragments.forEach(f => { if (rnd() < pct) f.enabled = false; });
+    State.dirty = true; updateStats(); redrawCanvas();
+  }
+  document.getElementById('btn-rnd25').addEventListener('click', () => randomDisable(0.25));
+  document.getElementById('btn-rnd50').addEventListener('click', () => randomDisable(0.5));
+  document.getElementById('btn-rnd75').addEventListener('click', () => randomDisable(0.75));
+
+  // Undo/Redo
+  document.getElementById('btn-undo').addEventListener('click', undo);
+  document.getElementById('btn-redo').addEventListener('click', redo);
+  document.getElementById('btn-undo-tb').addEventListener('click', undo);
+  document.getElementById('btn-redo-tb').addEventListener('click', redo);
+
+  // Export
+  document.getElementById('btn-export-png').addEventListener('click', exportFullPNG);
+  document.getElementById('btn-tb-export').addEventListener('click', exportFullPNG);
+  document.getElementById('btn-export-zip').addEventListener('click', exportZIP);
+
+  // Grid toggle from toolbar
+  document.getElementById('btn-tb-grid').addEventListener('click', () => {
+    State.showGrid = !State.showGrid;
+    document.getElementById('chk-grid').checked = State.showGrid;
+    redrawCanvas();
+  });
+
+  // Project save/load
+  document.getElementById('btn-save-proj').addEventListener('click', saveProject);
+  document.getElementById('btn-load-proj').addEventListener('click', () => {
+    document.getElementById('proj-file-input').click();
+  });
+  document.getElementById('proj-file-input').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => loadProject(ev.target.result);
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    const key = e.key.toLowerCase();
+    if (e.ctrlKey || e.metaKey) {
+      if (key === 'z') { e.preventDefault(); undo(); }
+      if (key === 'y') { e.preventDefault(); redo(); }
+      return;
+    }
+    if (key === 'e') { document.getElementById('btn-enable-all').click(); }
+    if (key === 'd') { document.getElementById('btn-disable-all').click(); }
+    if (key === 'i') { document.getElementById('btn-invert').click(); }
+    if (key === 'g') {
+      State.showGrid = !State.showGrid;
+      document.getElementById('chk-grid').checked = State.showGrid;
+      redrawCanvas();
+    }
+  });
+}
+
+function wireSlider(id, valId, unit, cb) {
+  const el = document.getElementById(id);
+  const valEl = document.getElementById(valId);
+  el.addEventListener('input', () => {
+    const v = parseInt(el.value);
+    valEl.textContent = v + unit;
+    cb(v);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// IMAGE UPLOAD HANDLER
+// ═══════════════════════════════════════════════════════
+async function handleFileUpload(file) {
+  if (!file.type.match(/image\/(png|jpe?g|webp)/)) {
+    alert('Unsupported format. Please upload PNG, JPG, JPEG, or WEBP.');
+    return;
+  }
+
+  showProgress('Loading image…', 10);
+  await yieldFrame();
+
+  try {
+    const { img, url } = await loadImageFromFile(file);
+    State.imageEl = img;
+    State.imgW = img.naturalWidth;
+    State.imgH = img.naturalHeight;
+
+    document.getElementById('img-info').style.display = 'block';
+    document.getElementById('no-image-msg').style.display = 'none';
+
+    updateProgressBar(40);
+    await yieldFrame();
+
+    // Load into p5
+    p5inst.loadImage(url, p5img => {
+      State.image = p5img;
+      updateProgressBar(70);
+      generateFragments();
+      updateStats();
+      updateProgressBar(100);
+      setTimeout(hideProgress, 300);
+      redrawCanvas();
+    });
+
+  } catch(e) {
+    hideProgress();
+    alert('Failed to load image: ' + e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  initP5();
+  wireUI();
+  syncUIFromState();
+  updateStats();
+});
+</script>
+</body>
+</html>
