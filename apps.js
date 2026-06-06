@@ -19,6 +19,11 @@ const APPS = [
     title: "P2P Calling",
     description: "Simple p2p calling tool",
     tags: ["webrtc", "peerjs", "p2p", "call"]
-  },
+  },{
+    dir: "apps/fragmented-art-editor",
+    title: "Fragmented Art Editor",
+    description: "Simple Fragmented Art Editor",
+    tags: ["art", "p5.js", "fragmented-art", "p5js"]
+  }
 
 ];
