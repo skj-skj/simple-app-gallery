@@ -24,6 +24,11 @@ const APPS = [
     title: "Fragment Wall Designer",
     description: "a Simple Fragment Wall Designer - Fragmented Art Editor",
     tags: ["art", "p5.js", "fragmented-art", "p5js", "designer", "editor", "fragment-wall"]
+  },{
+    dir: "apps/jain-quiz",
+    title: "Jain Quiz Hindi Flash Card",
+    description: "a Simple Flash Card app for Jain Quiz Learning",
+    tags: ["flash-card", "jain", "quiz", "game"]
   }
 
 ];
