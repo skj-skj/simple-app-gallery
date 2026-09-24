@@ -1,0 +1,27 @@
+<style>
+  .rps-wrap { max-width: 360px; margin: 0 auto; text-align: center; }
+  .rps-status { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; min-height: 1.4em; }
+  .rps-choices { display: flex; gap: 12px; justify-content: center; margin: 20px 0; }
+  .rps-choice {
+    font-size: 2.3rem; background: #fff; border: 2px solid #764ba2; border-radius: 16px;
+    width: 78px; height: 78px; cursor: pointer; transition: transform .15s, background .15s;
+  }
+  .rps-choice:disabled { opacity: .4; cursor: not-allowed; }
+  .rps-choice.selected { background: #ece7fb; border-color: #667eea; transform: scale(1.08); opacity: 1; }
+  .rps-choice:not(:disabled):hover { transform: scale(1.08); }
+  .rps-result { display: flex; justify-content: center; align-items: center; gap: 24px; margin: 16px 0; font-size: 2.1rem; }
+  .rps-result span.vs { font-size: 1rem; color: #888; }
+  .rps-score { margin-top: 8px; font-size: 0.9rem; color: #555; }
+  .rps-again { margin-top: 16px; }
+</style>
+<div class="rps-wrap">
+  <div class="rps-status" id="rps-status">Pick your move!</div>
+  <div class="rps-choices" id="rps-choices">
+    <button class="rps-choice" data-choice="rock">✊</button>
+    <button class="rps-choice" data-choice="paper">✋</button>
+    <button class="rps-choice" data-choice="scissors">✌️</button>
+  </div>
+  <div class="rps-result hidden" id="rps-result"></div>
+  <div class="rps-score" id="rps-score"></div>
+  <button id="rps-again-btn" class="rps-again hidden">Play Again</button>
+</div>

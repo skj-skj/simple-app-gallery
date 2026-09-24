@@ -1,0 +1,20 @@
+<style>
+  .ttt-wrap { max-width: 320px; margin: 0 auto; text-align: center; }
+  .ttt-status { font-size: 1.1rem; font-weight: 600; margin-bottom: 14px; min-height: 1.4em; }
+  .ttt-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .ttt-cell {
+    aspect-ratio: 1; background: #fff; border: 2px solid #764ba2; border-radius: 12px;
+    font-size: 2.2rem; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: #667eea; transition: transform .15s, background .15s;
+  }
+  .ttt-cell:disabled { cursor: not-allowed; }
+  .ttt-cell:not(:disabled):hover { transform: scale(1.05); background: #f3f0ff; }
+  .ttt-score { margin-top: 16px; font-size: 0.9rem; color: #555; }
+  .ttt-rematch { margin-top: 16px; }
+</style>
+<div class="ttt-wrap">
+  <div class="ttt-status" id="ttt-status">Loading…</div>
+  <div class="ttt-board" id="ttt-board"></div>
+  <div class="ttt-score" id="ttt-score"></div>
+  <button id="ttt-rematch-btn" class="ttt-rematch hidden">Play Again</button>
+</div>
