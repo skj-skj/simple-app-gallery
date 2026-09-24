@@ -34,10 +34,29 @@
 
   // ---- Extension point: register games here -----------------------------
   const GAMES = [
-    { id: 'tictactoe', name: 'Tic Tac Toe', icon: '❌⭕', html: 'games/tictactoe.html', js: 'games/tictactoe.js' },
-    { id: 'rps', name: 'Rock Paper Scissors', icon: '✊✋✌️', html: 'games/rps.html', js: 'games/rps.js' },
+  {
+    id: 'tictactoe',
+    name: 'Tic Tac Toe',
+    icon: '❌⭕',
+    html: 'games/tictactoe.html',
+    js: 'games/tictactoe.js'
+  },
+  {
+    id: 'rps',
+    name: 'Rock Paper Scissors',
+    icon: '✊✋✌️',
+    html: 'games/rps.html',
+    js: 'games/rps.js'
+  },
+  {
+    id: 'scribble',
+    name: 'Scribble',
+    icon: '🎨',
+    html: 'games/scribble.html',
+    js: 'games/scribble.js'
+  },
   ];
-
+  
   const ROOM_PREFIX = 'pcg-';
   const PING_INTERVAL_MS = 4000;
   const GUEST_RECONNECT_ATTEMPTS = 8;
