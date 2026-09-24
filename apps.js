@@ -29,6 +29,12 @@ const APPS = [
     title: "Jain Quiz Hindi Flash Card",
     description: "a Simple Flash Card app for Jain Quiz Learning",
     tags: ["flash-card", "jain", "quiz", "game"]
+  }, {
+    dir: "apps/p2p-couple-games",
+    title: "Peer2Peer Couple Games",
+    description: "Peer2Peer Couple Games",
+    tags: ["p2p", "peerjs", "games", "multiplayer"]
   }
+  
 
 ];
