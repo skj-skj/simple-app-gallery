@@ -1,0 +1,186 @@
+<style>
+  .scr2-wrap { width: min(100%, 820px); margin: 0 auto; }
+  .scr2-hidden { display: none !important; }
+
+  /* ---------- Setup (host only) ---------- */
+  .scr2-setup { text-align: left; }
+  .scr2-setup h3 { margin-bottom: 12px; color: #764ba2; }
+  .scr2-field { margin-bottom: 14px; }
+  .scr2-field label {
+    display: block; font-size: 0.85rem; font-weight: 600;
+    margin-bottom: 6px; color: #444;
+  }
+  .scr2-field select,
+  .scr2-field textarea {
+    width: 100%; padding: 10px; border: 2px solid #e0e0e0;
+    border-radius: 8px; font-size: 0.95rem; font-family: inherit;
+  }
+  .scr2-field select:focus,
+  .scr2-field textarea:focus { outline: none; border-color: #667eea; }
+  .scr2-field textarea { min-height: 78px; resize: vertical; }
+  .scr2-hint { font-size: 0.78rem; color: #888; margin-top: 4px; }
+  .scr2-waiting-card {
+    text-align: center; padding: 26px 10px; color: #666; font-size: 0.98rem;
+  }
+
+  /* ---------- Top status bar ---------- */
+  .scr2-top {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+  }
+  .scr2-status { font-weight: 600; font-size: 0.98rem; text-align: left; }
+  .scr2-timer {
+    font-weight: 700; font-size: 1.1rem; min-width: 40px; text-align: center;
+    padding: 3px 10px; border-radius: 8px; background: #f3f0ff; color: #5568d3;
+  }
+  .scr2-timer.low { background: #ffe3e3; color: #c0392b; }
+
+  .scr2-word {
+    min-height: 40px; margin-bottom: 10px; padding: 8px 14px;
+    border-radius: 10px; background: #f3f0ff; font-size: 1.1rem;
+    font-weight: 700; letter-spacing: 1px; display: flex; align-items: center;
+  }
+  .scr2-word.masked { color: #666; font-weight: 500; letter-spacing: normal; }
+
+  /* ---------- Canvas ---------- */
+  .scr2-canvas-wrap {
+    position: relative; width: 100%; aspect-ratio: 4 / 3; background: #fff;
+    border: 2px solid #764ba2; border-radius: 14px; overflow: hidden;
+    touch-action: none;
+  }
+  .scr2-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .scr2-canvas.draw, .scr2-canvas.erase { cursor: crosshair; }
+  .scr2-canvas.fill { cursor: cell; }
+
+  /* ---------- Toolbar ---------- */
+  .scr2-toolbar {
+    margin-top: 10px; display: flex; flex-wrap: wrap; gap: 10px;
+    align-items: center; justify-content: center;
+  }
+  .scr2-toolbar.scr2-disabled { opacity: 0.45; pointer-events: none; }
+
+  .scr2-tool-group { display: flex; gap: 4px; background: #f2f2f7; padding: 4px; border-radius: 10px; }
+  .scr2-tool-btn {
+    width: auto; padding: 6px 11px; font-size: 1.05rem; background: transparent;
+    color: #333; box-shadow: none;
+  }
+  .scr2-tool-btn:hover { background: rgba(0,0,0,0.05); transform: none; }
+  .scr2-tool-btn.active { background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
+
+  .scr2-swatches { display: flex; gap: 5px; flex-wrap: wrap; }
+  .scr2-swatch {
+    width: 24px; height: 24px; border-radius: 50%; padding: 0;
+    border: 2px solid rgba(0,0,0,0.15); cursor: pointer;
+  }
+  .scr2-swatch.active { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #333; }
+
+  .scr2-color-input {
+    width: 34px; height: 34px; padding: 2px; border: 2px solid #e0e0e0;
+    border-radius: 8px; cursor: pointer;
+  }
+
+  .scr2-size-wrap { display: flex; align-items: center; gap: 7px; }
+  .scr2-size { width: 90px; }
+  .scr2-size-preview { width: 16px; height: 16px; border-radius: 50%; background: #222; flex-shrink: 0; }
+
+  .scr2-clear-btn { width: auto; padding: 7px 14px; background: #eee; color: #444; }
+  .scr2-clear-btn:hover { background: #e2e2e2; }
+
+  /* ---------- Guess box ---------- */
+  .scr2-guess-area { margin-top: 14px; }
+  .scr2-guess-area.scr2-disabled { opacity: 0.5; pointer-events: none; }
+  .scr2-guess-input {
+    width: 100%; padding: 13px 14px; font-size: 16px; border: 2px solid #e0e0e0;
+    border-radius: 10px; margin-bottom: 8px;
+  }
+  .scr2-guess-input:focus { outline: none; border-color: #667eea; }
+  .scr2-guess-btn { width: 100%; }
+
+  /* ---------- Feed / score ---------- */
+  .scr2-feed {
+    margin-top: 12px; max-height: 110px; overflow-y: auto;
+    border-top: 1px solid #eee; padding-top: 8px; text-align: left; font-size: 0.88rem;
+  }
+  .scr2-feed-item { padding: 3px 0; color: #555; word-break: break-word; }
+  .scr2-feed-item.correct { color: #28a745; font-weight: 700; }
+  .scr2-feed-item.system { color: #888; font-style: italic; }
+  .scr2-feed-item.me { color: #667eea; }
+
+  .scr2-score { margin-top: 10px; text-align: center; font-size: 0.9rem; color: #555; }
+
+  @media (max-width: 480px) {
+    .scr2-top { align-items: flex-start; }
+    .scr2-toolbar { gap: 8px; }
+  }
+</style>
+
+<div class="scr2-wrap">
+
+  <!-- Setup (room host configures round time + word list) -->
+  <div class="scr2-setup" id="s2-setup">
+    <h3>🎨 Scribble 2 — settings</h3>
+    <div class="scr2-field">
+      <label for="s2-time">Round time</label>
+      <select id="s2-time">
+        <option value="30">30 seconds</option>
+        <option value="45">45 seconds</option>
+        <option value="60" selected>60 seconds</option>
+        <option value="90">90 seconds</option>
+        <option value="120">120 seconds</option>
+      </select>
+    </div>
+    <div class="scr2-field">
+      <label for="s2-words">Custom word list (optional)</label>
+      <textarea id="s2-words" placeholder="cat, pizza, guitar, rainbow... (comma or new line separated — leave blank to use the default words)"></textarea>
+      <div class="scr2-hint">Add at least 4 words to use your own list instead of the default one.</div>
+    </div>
+    <button type="button" id="s2-start-btn">Start Game</button>
+  </div>
+
+  <!-- Guest sees this until the host starts the game -->
+  <div class="scr2-waiting-card scr2-hidden" id="s2-waiting">
+    ⏳ Waiting for <span id="s2-waiting-name">your partner</span> to set up the game…
+  </div>
+
+  <!-- Active game -->
+  <div id="s2-game" class="scr2-hidden">
+    <div class="scr2-top">
+      <div class="scr2-status" id="s2-status">Get ready…</div>
+      <div class="scr2-timer" id="s2-timer">--</div>
+    </div>
+
+    <div class="scr2-word masked" id="s2-word">Get ready!</div>
+
+    <div class="scr2-canvas-wrap" id="s2-canvas-wrap">
+      <canvas class="scr2-canvas draw" id="s2-canvas"></canvas>
+    </div>
+
+    <div class="scr2-toolbar scr2-disabled" id="s2-toolbar">
+      <div class="scr2-tool-group">
+        <button type="button" class="scr2-tool-btn active" id="s2-tool-draw" title="Pen">✏️</button>
+        <button type="button" class="scr2-tool-btn" id="s2-tool-erase" title="Eraser">🧽</button>
+        <button type="button" class="scr2-tool-btn" id="s2-tool-fill" title="Fill">🪣</button>
+      </div>
+
+      <div class="scr2-swatches" id="s2-swatches"></div>
+      <input type="color" id="s2-color" class="scr2-color-input" value="#222222" title="Custom color">
+
+      <div class="scr2-size-wrap">
+        <span class="scr2-size-preview" id="s2-size-preview"></span>
+        <input type="range" id="s2-size" class="scr2-size" min="2" max="28" value="6" title="Brush size">
+      </div>
+
+      <button type="button" id="s2-clear-btn" class="scr2-clear-btn">Clear</button>
+    </div>
+
+    <div class="scr2-guess-area scr2-disabled" id="s2-guess-area">
+      <input type="text" id="s2-guess-input" class="scr2-guess-input" placeholder="Type your guess…" autocomplete="off" enterkeyhint="send" maxlength="60">
+      <button type="button" id="s2-guess-btn" class="scr2-guess-btn">Guess</button>
+    </div>
+
+    <div class="scr2-feed" id="s2-feed"></div>
+
+    <div class="scr2-score" id="s2-score">You 0 — 0 Partner</div>
+  </div>
+</div>
+                                              

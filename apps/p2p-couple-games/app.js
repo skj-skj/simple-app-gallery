@@ -34,27 +34,27 @@
 
   // ---- Extension point: register games here -----------------------------
   const GAMES = [
-  {
-    id: 'tictactoe',
-    name: 'Tic Tac Toe',
-    icon: '❌⭕',
-    html: 'games/tictactoe.html',
-    js: 'games/tictactoe.js'
-  },
-  {
-    id: 'rps',
-    name: 'Rock Paper Scissors',
-    icon: '✊✋✌️',
-    html: 'games/rps.html',
-    js: 'games/rps.js'
-  },
-  {
-    id: 'scribble',
-    name: 'Scribble',
-    icon: '🎨',
-    html: 'games/scribble.html',
-    js: 'games/scribble.js'
-  },
+    {
+      id: 'tictactoe',
+      name: 'Tic Tac Toe',
+      icon: '❌⭕',
+      html: 'games/tictactoe.html',
+      js: 'games/tictactoe.js'
+    },
+    {
+      id: 'rps',
+      name: 'Rock Paper Scissors',
+      icon: '✊✋✌️',
+      html: 'games/rps.html',
+      js: 'games/rps.js'
+    },
+    { 
+      id: 'scribble2',
+      name: 'Scribble 2',
+      icon: '🖌️',
+      html: 'games/scribble2.html',
+      js: 'games/scribble2.js'
+    },
   ];
   
   const ROOM_PREFIX = 'pcg-';
