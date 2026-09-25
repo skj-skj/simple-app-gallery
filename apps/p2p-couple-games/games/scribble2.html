@@ -41,6 +41,22 @@
     font-weight: 700; letter-spacing: 1px; display: flex; align-items: center;
   }
   .scr2-word.masked { color: #666; font-weight: 500; letter-spacing: normal; }
+  .scr2-word.dashes {
+    font-family: 'Courier New', monospace; font-weight: 700; color: #444;
+    letter-spacing: 2px; white-space: pre-wrap; line-height: 1.5;
+  }
+
+  /* ---------- Word choice (drawer only) ---------- */
+  .scr2-choose { margin-bottom: 10px; text-align: center; }
+  .scr2-choose-title { font-weight: 600; color: #555; margin-bottom: 8px; font-size: 0.92rem; }
+  .scr2-choose-options { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .scr2-choice-btn {
+    width: auto; max-width: 260px; padding: 10px 16px; font-weight: 700;
+    background: #f3f0ff; color: #5568d3; border: 2px solid #d9d3fb;
+    white-space: normal;
+  }
+  .scr2-choice-btn:hover { background: #e9e3ff; }
+  .scr2-choose-timer { margin-top: 6px; font-size: 0.8rem; color: #888; }
 
   /* ---------- Canvas ---------- */
   .scr2-canvas-wrap {
@@ -145,9 +161,16 @@
       </select>
     </div>
     <div class="scr2-field">
-      <label for="s2-words">Custom word list (optional)</label>
-      <textarea id="s2-words" placeholder="cat, pizza, guitar, rainbow... (comma or new line separated — leave blank to use the default words)"></textarea>
-      <div class="scr2-hint">Add at least 4 words to use your own list instead of the default one.</div>
+      <label for="s2-category">Word list</label>
+      <select id="s2-category">
+        <option value="all" selected>All categories</option>
+        <option value="custom" id="s2-custom-option">Custom list…</option>
+      </select>
+    </div>
+    <div class="scr2-field scr2-hidden" id="s2-custom-field">
+      <label for="s2-words">Custom words</label>
+      <textarea id="s2-words" placeholder="cat, pizza, guitar, rainbow... (comma or new line separated)"></textarea>
+      <div class="scr2-hint">Add at least 4 words.</div>
     </div>
     <button type="button" id="s2-start-btn">Start Game</button>
   </div>
@@ -177,6 +200,12 @@
     </div>
 
     <div class="scr2-word masked" id="s2-word">Get ready!</div>
+
+    <div class="scr2-choose scr2-hidden" id="s2-choose">
+      <div class="scr2-choose-title">Pick a word to draw:</div>
+      <div class="scr2-choose-options" id="s2-choose-options"></div>
+      <div class="scr2-choose-timer" id="s2-choose-timer"></div>
+    </div>
 
     <div class="scr2-canvas-wrap" id="s2-canvas-wrap">
       <canvas class="scr2-canvas draw" id="s2-canvas"></canvas>

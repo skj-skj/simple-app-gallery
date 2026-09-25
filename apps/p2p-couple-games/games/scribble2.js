@@ -41,6 +41,12 @@
   const NEXT_ROUND_DELAY_MS = 2200;
   const MIN_CUSTOM_WORDS = 4;
   const FILL_TOLERANCE = 48;
+  const WORD_LIST_URL = 'games/assets/scribble-word-list.json';
+  // Fractions of round time *remaining* at which the drawer reveals a
+  // letter to the guesser — first hint with 60% of the time left,
+  // second with 40% left.
+  const HINT_THRESHOLDS = [0.6, 0.4];
+  const CHOOSE_SECONDS = 10; // how long the drawer has to pick a word
 
   const Scribble2 = {
     init(api) {
@@ -56,6 +62,15 @@
       this.startedAt = 0;
       this.timerHandle = null;
       this.score = { me: 0, opp: 0 };
+
+      this.wordListData = null;   // { categoryKey: { label, words[] } }, host-only
+      this.hintsSent = 0;         // how many hints the drawer has sent this round
+      this.revealedIndices = null; // Set of letter indices already hinted (drawer side)
+      this.guessMask = null;      // per-character array the guesser renders as dashes
+      this.usedWords = new Set(); // lowercase words already drawn this session — no repeats
+      this.pendingChoices = null; // the 3 words currently offered to the drawer
+      this.chooseTimerHandle = null;
+      this.chooseSecondsLeft = CHOOSE_SECONDS;
 
       this.tool = 'draw';
       this.color = '#222222';
@@ -81,6 +96,7 @@
       if (api.isHost) {
         this.setupEl.classList.remove('scr2-hidden');
         this.playAgainBtn.classList.remove('scr2-hidden');
+        this.loadWordListAsset();
       } else {
         this.waitingNameEl.textContent = api.peerNickname || 'your partner';
         this.waitingEl.classList.remove('scr2-hidden');
@@ -96,6 +112,8 @@
       this.waitingNameEl = $('#s2-waiting-name');
       this.timeSelect = $('#s2-time');
       this.roundsSelect = $('#s2-rounds');
+      this.categorySelect = $('#s2-category');
+      this.customFieldEl = $('#s2-custom-field');
       this.wordsInput = $('#s2-words');
       this.startBtn = $('#s2-start-btn');
 
@@ -109,6 +127,10 @@
       this.statusEl = $('#s2-status');
       this.timerEl = $('#s2-timer');
       this.wordEl = $('#s2-word');
+
+      this.chooseEl = $('#s2-choose');
+      this.chooseOptionsEl = $('#s2-choose-options');
+      this.chooseTimerLabel = $('#s2-choose-timer');
 
       this.canvas = $('#s2-canvas');
 
@@ -133,6 +155,9 @@
     bindEvents() {
       this.startBtn.addEventListener('click', () => this.startGame());
       this.playAgainBtn.addEventListener('click', () => this.showSetupAgain());
+      this.categorySelect.addEventListener('change', () => {
+        this.customFieldEl.classList.toggle('scr2-hidden', this.categorySelect.value !== 'custom');
+      });
 
       this.toolDrawBtn.addEventListener('click', () => this.setTool('draw'));
       this.toolEraseBtn.addEventListener('click', () => this.setTool('erase'));
@@ -178,11 +203,68 @@
       return list;
     },
 
+    // Fetches the categorized word-list asset (pure data — see
+    // games/assets/scribble-word-list.json) and, once it's in, adds an
+    // <option> for each category to the setup dropdown. Failure just
+    // means the host is left with "All" (falling back to DEFAULT_WORDS)
+    // and "Custom list…" — the game still works.
+    loadWordListAsset() {
+      fetch(WORD_LIST_URL)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          this.wordListData = data;
+          if (data) this.populateCategorySelect(data);
+        })
+        .catch(() => { this.wordListData = null; });
+    },
+
+    populateCategorySelect(list) {
+      const customOpt = this.categorySelect.querySelector('#s2-custom-option');
+      const frag = document.createDocumentFragment();
+      Object.keys(list).forEach((key) => {
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = `${list[key].label} (${list[key].words.length})`;
+        frag.appendChild(opt);
+      });
+      this.categorySelect.insertBefore(frag, customOpt);
+    },
+
+    // Turns the setup screen's word-list selection into a concrete word
+    // array: a specific category, every category merged and de-duplicated
+    // ("All"), or the host's own custom list.
+    resolveWordSelection() {
+      const mode = this.categorySelect.value;
+
+      if (mode === 'custom') {
+        const custom = this.parseCustomWords(this.wordsInput.value);
+        return custom.length >= MIN_CUSTOM_WORDS ? custom : DEFAULT_WORDS.slice();
+      }
+
+      const list = this.wordListData;
+      if (!list) return DEFAULT_WORDS.slice();
+
+      if (mode === 'all') {
+        const seen = new Set();
+        const merged = [];
+        Object.keys(list).forEach((key) => {
+          (list[key].words || []).forEach((w) => {
+            const norm = w.toLowerCase();
+            if (seen.has(norm)) return;
+            seen.add(norm);
+            merged.push(w);
+          });
+        });
+        return merged;
+      }
+
+      return list[mode] ? list[mode].words.slice() : DEFAULT_WORDS.slice();
+    },
+
     startGame() {
       const time = parseInt(this.timeSelect.value, 10) || 60;
       const roundsEach = parseInt(this.roundsSelect.value, 10) || 5;
-      const custom = this.parseCustomWords(this.wordsInput.value);
-      const words = custom.length >= MIN_CUSTOM_WORDS ? custom : DEFAULT_WORDS;
+      const words = this.resolveWordSelection();
 
       this.roundTime = time;
       this.roundsEach = roundsEach;
@@ -230,54 +312,188 @@
     canDraw() { return this.roundActive && this.isMyDrawingTurn(); },
     canGuess() { return this.roundActive && !this.isMyDrawingTurn(); },
 
+    turnLabel() {
+      return `Turn ${Math.floor(this.round / 2) + 1}/${this.roundsEach}`;
+    },
+
+    spaceIndices(word) {
+      const idx = [];
+      for (let i = 0; i < word.length; i++) if (word[i] === ' ') idx.push(i);
+      return idx;
+    },
+
+    // beginRound() only announces which round it is — nobody's drawing
+    // timer starts yet. The drawer still has to pick a word (see
+    // beginWordChoice()); the actual countdown starts from selectWord()
+    // / receiveWordChosen(), once a word is locked in.
     beginRound(round) {
-      const startedAt = Date.now();
-      this.applyRoundStart({ round, startedAt });
-      this.api.send({ type: 'ROUND_START', round, startedAt });
+      this.applyRoundStart({ round });
+      this.api.send({ type: 'ROUND_START', round });
     },
 
     applyRoundStart(msg) {
       this.round = msg.round;
-      this.roundActive = true;
-      this.startedAt = msg.startedAt;
+      this.roundActive = false;
       this.secretWord = null;
+      this.guessMask = null;
+      this.hintsSent = 0;
+      this.revealedIndices = new Set();
+      this.stopTimer();
+      this.stopChooseTimer();
 
       if (msg.round === 0) {
         this.score = { me: 0, opp: 0 };
         this.updateScore();
+        this.usedWords = new Set(); // fresh no-repeat pool for a new game
       }
 
       this.setTool('draw');
       this.clearCanvas();
       this.clearFeed();
-
-      const turnLabel = `Turn ${Math.floor(this.round / 2) + 1}/${this.roundsEach}`;
+      this.chooseEl.classList.add('scr2-hidden');
+      this.timerEl.textContent = '--';
+      this.timerEl.classList.remove('low');
+      this.setToolbarEnabled(false);
+      this.setGuessEnabled(false);
 
       if (this.isMyDrawingTurn()) {
-        this.secretWord = this.words[Math.floor(Math.random() * this.words.length)];
-        this.statusEl.textContent = `Your turn — draw this! ✏️ (${turnLabel})`;
-        this.wordEl.textContent = this.secretWord;
-        this.wordEl.classList.remove('masked');
-        this.setToolbarEnabled(true);
-        this.setGuessEnabled(false);
-      } else {
-        this.statusEl.textContent = `Partner is drawing… (${turnLabel})`;
-        this.wordEl.textContent = 'Guess what they are drawing!';
+        this.statusEl.textContent = `Your turn — pick a word! (${this.turnLabel()})`;
+        this.wordEl.textContent = '';
+        this.wordEl.classList.remove('dashes');
         this.wordEl.classList.add('masked');
-        this.setToolbarEnabled(false);
-        this.setGuessEnabled(true);
+        this.beginWordChoice();
+      } else {
+        this.statusEl.textContent = `Partner is choosing a word… (${this.turnLabel()})`;
+        this.wordEl.textContent = 'Waiting for partner to pick a word…';
+        this.wordEl.classList.remove('dashes');
+        this.wordEl.classList.add('masked');
       }
+    },
+
+    // ---------------------------------------------------------------
+    // Word choice — skribbl-style: the drawer picks one of 3 options
+    // (auto-picking the first if they don't choose in time). Words are
+    // drawn from the not-yet-used pool for this session so nothing
+    // repeats until every word in the chosen list has come up once.
+    // ---------------------------------------------------------------
+
+    pickWordChoices(n) {
+      const unused = this.words.filter((w) => !this.usedWords.has(w.toLowerCase()));
+      const source = unused.length >= n ? unused : this.words;
+      const shuffled = source.slice().sort(() => Math.random() - 0.5);
+      return shuffled.slice(0, Math.min(n, shuffled.length));
+    },
+
+    beginWordChoice() {
+      this.pendingChoices = this.pickWordChoices(3);
+      this.chooseOptionsEl.innerHTML = '';
+      this.pendingChoices.forEach((word) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'scr2-choice-btn';
+        btn.textContent = word;
+        btn.addEventListener('click', () => this.selectWord(word));
+        this.chooseOptionsEl.appendChild(btn);
+      });
+      this.chooseEl.classList.remove('scr2-hidden');
+      this.startChooseTimer();
+    },
+
+    startChooseTimer() {
+      this.stopChooseTimer();
+      this.chooseSecondsLeft = CHOOSE_SECONDS;
+      const tick = () => {
+        this.chooseTimerLabel.textContent = `Auto-picking in ${this.chooseSecondsLeft}s`;
+        if (this.chooseSecondsLeft <= 0) {
+          this.selectWord(this.pendingChoices[0]);
+          return;
+        }
+        this.chooseSecondsLeft--;
+        this.chooseTimerHandle = setTimeout(tick, 1000);
+      };
+      tick();
+    },
+
+    stopChooseTimer() {
+      if (this.chooseTimerHandle) clearTimeout(this.chooseTimerHandle);
+      this.chooseTimerHandle = null;
+    },
+
+    selectWord(word) {
+      this.stopChooseTimer();
+      this.pendingChoices = null;
+      this.chooseEl.classList.add('scr2-hidden');
+
+      this.secretWord = word;
+      this.usedWords.add(word.toLowerCase());
+      if (this.usedWords.size >= this.words.length) {
+        // Whole pool used up this session — start a fresh cycle rather
+        // than getting stuck with nothing left to offer.
+        this.usedWords = new Set([word.toLowerCase()]);
+      }
+
+      this.hintsSent = 0;
+      this.revealedIndices = new Set();
+      this.startedAt = Date.now();
+      this.roundActive = true;
+
+      this.statusEl.textContent = `Your turn — draw this! ✏️ (${this.turnLabel()})`;
+      this.wordEl.textContent = this.secretWord;
+      this.wordEl.classList.remove('masked');
+      this.setToolbarEnabled(true);
+
+      this.startTimer();
+
+      this.api.send({
+        type: 'WORD_CHOSEN',
+        startedAt: this.startedAt,
+        length: word.length,
+        spaces: this.spaceIndices(word),
+      });
+    },
+
+    receiveWordChosen(msg) {
+      if (this.round < 0) return;
+
+      this.startedAt = msg.startedAt;
+      this.roundActive = true;
+      this.hintsSent = 0;
+
+      this.guessMask = new Array(msg.length).fill(null);
+      (msg.spaces || []).forEach((i) => { this.guessMask[i] = ' '; });
+      this.renderGuessMask();
+
+      this.statusEl.textContent = `Partner is drawing… (${this.turnLabel()})`;
+      this.setToolbarEnabled(false);
+      this.setGuessEnabled(true);
 
       this.startTimer();
     },
+
+    renderGuessMask() {
+      if (!this.guessMask) return;
+      this.wordEl.textContent = this.guessMask.map((c) => (c === null ? '_' : c)).join(' ');
+      this.wordEl.classList.remove('masked');
+      this.wordEl.classList.add('dashes');
+    },
+
+    // ---------------------------------------------------------------
+    // Timer + letter hints — only the drawer decides when/what to
+    // reveal, since only the drawer knows secretWord; the guesser just
+    // applies whatever HINT messages arrive.
+    // ---------------------------------------------------------------
 
     startTimer() {
       this.stopTimer();
       const tick = () => {
         if (!this.roundActive) return;
-        const remaining = Math.max(0, this.roundTime - Math.floor((Date.now() - this.startedAt) / 1000));
+        const elapsed = (Date.now() - this.startedAt) / 1000;
+        const remaining = Math.max(0, this.roundTime - Math.floor(elapsed));
         this.timerEl.textContent = remaining;
         this.timerEl.classList.toggle('low', remaining <= 10);
+
+        if (this.isMyDrawingTurn()) this.maybeDropHint(remaining);
+
         if (remaining <= 0) { this.handleTimeout(); return; }
         this.timerHandle = setTimeout(tick, 250);
       };
@@ -287,6 +503,34 @@
     stopTimer() {
       if (this.timerHandle) clearTimeout(this.timerHandle);
       this.timerHandle = null;
+    },
+
+    maybeDropHint(remaining) {
+      if (!this.secretWord) return;
+      const fraction = remaining / this.roundTime;
+      const threshold = HINT_THRESHOLDS[this.hintsSent];
+      if (threshold === undefined || fraction > threshold) return;
+      this.sendHint();
+      this.hintsSent++;
+    },
+
+    sendHint() {
+      const candidates = [];
+      for (let i = 0; i < this.secretWord.length; i++) {
+        if (this.secretWord[i] === ' ' || this.revealedIndices.has(i)) continue;
+        candidates.push(i);
+      }
+      if (!candidates.length) return;
+      const index = candidates[Math.floor(Math.random() * candidates.length)];
+      this.revealedIndices.add(index);
+      this.api.send({ type: 'HINT', index, letter: this.secretWord[index] });
+    },
+
+    receiveHint(msg) {
+      if (!this.roundActive || !this.guessMask) return;
+      this.guessMask[msg.index] = msg.letter;
+      this.renderGuessMask();
+      this.addFeed('💡 A letter was revealed', 'system');
     },
 
     handleTimeout() {
@@ -387,6 +631,8 @@
 
       this.statusEl.textContent = 'Correct! 🎉';
       this.addFeed(`🎉 Correct! The word was "${msg.word}"`, 'correct');
+      this.wordEl.textContent = msg.word;
+      this.wordEl.classList.remove('masked', 'dashes');
       this.setGuessEnabled(false);
       this.afterRoundEnd();
     },
@@ -398,6 +644,8 @@
 
       this.statusEl.textContent = `Time's up! The word was "${msg.word}".`;
       this.addFeed(`⏰ Time's up — the word was "${msg.word}"`, 'system');
+      this.wordEl.textContent = msg.word;
+      this.wordEl.classList.remove('masked', 'dashes');
       this.setGuessEnabled(false);
       this.afterRoundEnd();
     },
@@ -756,6 +1004,8 @@
       switch (msg.type) {
         case 'CONFIG': this.applyConfig(msg); break;
         case 'ROUND_START': this.applyRoundStart(msg); break;
+        case 'WORD_CHOSEN': this.receiveWordChosen(msg); break;
+        case 'HINT': this.receiveHint(msg); break;
         case 'STROKE_START': this.receiveStrokeStart(msg); break;
         case 'STROKE_MOVE': this.receiveStrokeMove(msg); break;
         case 'FILL': this.receiveFill(msg); break;
@@ -768,6 +1018,7 @@
 
     destroy() {
       this.stopTimer();
+      this.stopChooseTimer();
       if (this.unsub) { this.unsub(); this.unsub = null; }
     },
   };

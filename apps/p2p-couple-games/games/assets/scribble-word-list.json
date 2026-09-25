@@ -1,0 +1,102 @@
+{
+  "animals": {
+    "label": "Animals",
+    "words": [
+      "elephant", "lion", "tiger", "giraffe", "peacock", "panda", "kangaroo",
+      "dolphin", "penguin", "camel", "crocodile", "parrot", "octopus",
+      "butterfly", "squirrel", "flamingo", "cheetah", "jellyfish",
+      "chameleon", "hedgehog", "cobra", "monkey", "owl", "tortoise"
+    ]
+  },
+  "household": {
+    "label": "Household Objects",
+    "words": [
+      "ceiling fan", "pressure cooker", "refrigerator", "toothbrush",
+      "umbrella", "pillow", "mop", "ladder", "thermos", "clothesline",
+      "doormat", "vacuum cleaner", "wardrobe", "frying pan", "candle",
+      "mirror", "broom", "blanket", "shower head", "key chain",
+      "sewing machine", "clothes hanger", "rolling pin", "flashlight"
+    ]
+  },
+  "actions": {
+    "label": "Actions & Verbs",
+    "words": [
+      "juggling", "sneezing", "whispering", "skateboarding", "yawning",
+      "painting", "swimming", "climbing", "dancing", "snoring",
+      "stretching", "cartwheeling", "shivering", "balancing", "sprinting",
+      "meditating", "gardening", "sculpting", "bargaining", "hiccupping",
+      "tiptoeing", "somersaulting", "whistling", "sleepwalking"
+    ]
+  },
+  "popCulture": {
+    "label": "Pop Culture",
+    "words": [
+      "Bollywood", "IPL", "Money Heist", "Marvel", "Harry Potter", "PUBG",
+      "TikTok", "Avengers", "Sachin Tendulkar", "Virat Kohli", "Bigg Boss",
+      "Baahubali", "Star Wars", "Pokemon", "Mr Bean", "Cricket World Cup",
+      "Netflix", "YouTube", "Instagram reel", "Squid Game", "Minecraft",
+      "Stranger Things", "Game of Thrones", "K-pop"
+    ]
+  },
+  "places": {
+    "label": "Places & Landmarks",
+    "words": [
+      "Taj Mahal", "Red Fort", "Gateway of India", "India Gate",
+      "Golden Temple", "Hawa Mahal", "Qutub Minar", "Char Minar",
+      "Eiffel Tower", "Statue of Liberty", "Great Wall of China",
+      "Pyramids of Giza", "Big Ben", "Sydney Opera House",
+      "Leaning Tower of Pisa", "Mount Everest", "Niagara Falls",
+      "Times Square", "Colosseum", "Burj Khalifa", "Kerala backwaters",
+      "Amazon rainforest", "Great Barrier Reef", "Machu Picchu"
+    ]
+  },
+  "jobs": {
+    "label": "Jobs & Professions",
+    "words": [
+      "firefighter", "chef", "plumber", "astronaut", "teacher", "farmer",
+      "electrician", "pilot", "dentist", "journalist", "photographer",
+      "tailor", "mechanic", "lifeguard", "librarian", "referee", "barista",
+      "surgeon", "carpenter", "fisherman", "software engineer",
+      "delivery agent", "police officer", "veterinarian"
+    ]
+  },
+  "compound": {
+    "label": "Compound Words",
+    "words": [
+      "basketball", "sunflower", "notebook", "toothpaste", "firefly",
+      "snowman", "keyboard", "football", "moonlight", "waterfall",
+      "earthquake", "grandmother", "backpack", "lighthouse", "skyscraper",
+      "headphones", "popcorn", "hairbrush", "rainbow", "spaceship",
+      "eyeglasses", "handshake", "airport", "sandcastle"
+    ]
+  },
+  "food": {
+    "label": "Food & Drinks",
+    "words": [
+      "samosa", "biryani", "pizza", "masala chai", "pani puri",
+      "ice cream", "burger", "dosa", "pasta", "butter chicken", "sushi",
+      "pancake", "mango lassi", "french fries", "vada pav", "jalebi",
+      "noodles", "chocolate cake", "lemonade", "momos", "tacos",
+      "spring rolls", "gulab jamun"
+    ]
+  },
+  "sports": {
+    "label": "Sports & Games",
+    "words": [
+      "cricket", "badminton", "kabaddi", "chess", "table tennis",
+      "hopscotch", "kite flying", "tug of war", "carrom", "hockey",
+      "volleyball", "wrestling", "archery", "skating", "bowling", "rugby",
+      "marathon", "boxing", "gymnastics", "surfing", "rock climbing",
+      "snooker"
+    ]
+  },
+  "nature": {
+    "label": "Nature & Weather",
+    "words": [
+      "thunderstorm", "volcano", "monsoon", "desert", "glacier", "tornado",
+      "sunrise", "sunset", "avalanche", "coral reef", "rainforest",
+      "snowflake", "lightning", "hurricane", "iceberg", "meadow",
+      "eclipse", "sandstorm", "waterfall", "whirlpool", "cave", "geyser"
+    ]
+  }
+}
