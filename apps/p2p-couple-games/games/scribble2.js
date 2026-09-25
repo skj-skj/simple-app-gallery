@@ -48,6 +48,8 @@
 
       this.round = -1;
       this.roundTime = 60;
+      this.roundsEach = 5;
+      this.totalRounds = 10;
       this.words = DEFAULT_WORDS;
       this.secretWord = null;
       this.roundActive = false;
@@ -78,9 +80,11 @@
 
       if (api.isHost) {
         this.setupEl.classList.remove('scr2-hidden');
+        this.playAgainBtn.classList.remove('scr2-hidden');
       } else {
         this.waitingNameEl.textContent = api.peerNickname || 'your partner';
         this.waitingEl.classList.remove('scr2-hidden');
+        this.endWaitingNoteEl.classList.remove('scr2-hidden');
       }
     },
 
@@ -91,8 +95,15 @@
       this.waitingEl = $('#s2-waiting');
       this.waitingNameEl = $('#s2-waiting-name');
       this.timeSelect = $('#s2-time');
+      this.roundsSelect = $('#s2-rounds');
       this.wordsInput = $('#s2-words');
       this.startBtn = $('#s2-start-btn');
+
+      this.endEl = $('#s2-end');
+      this.endResultEl = $('#s2-end-result');
+      this.endScoreEl = $('#s2-end-score');
+      this.playAgainBtn = $('#s2-play-again-btn');
+      this.endWaitingNoteEl = $('#s2-end-waiting-note');
 
       this.gameEl = $('#s2-game');
       this.statusEl = $('#s2-status');
@@ -121,6 +132,7 @@
 
     bindEvents() {
       this.startBtn.addEventListener('click', () => this.startGame());
+      this.playAgainBtn.addEventListener('click', () => this.showSetupAgain());
 
       this.toolDrawBtn.addEventListener('click', () => this.setTool('draw'));
       this.toolEraseBtn.addEventListener('click', () => this.setTool('erase'));
@@ -168,25 +180,40 @@
 
     startGame() {
       const time = parseInt(this.timeSelect.value, 10) || 60;
+      const roundsEach = parseInt(this.roundsSelect.value, 10) || 5;
       const custom = this.parseCustomWords(this.wordsInput.value);
       const words = custom.length >= MIN_CUSTOM_WORDS ? custom : DEFAULT_WORDS;
 
       this.roundTime = time;
+      this.roundsEach = roundsEach;
+      this.totalRounds = roundsEach * 2;
       this.words = words;
 
       this.setupEl.classList.add('scr2-hidden');
+      this.endEl.classList.add('scr2-hidden');
       this.gameEl.classList.remove('scr2-hidden');
 
-      this.api.send({ type: 'CONFIG', roundTime: time, words });
+      this.api.send({ type: 'CONFIG', roundTime: time, roundsEach, words });
       this.beginRound(0);
+    },
+
+    // Host-only: return to the setup screen after a game finishes, to
+    // configure and start another one.
+    showSetupAgain() {
+      if (!this.api.isHost) return;
+      this.endEl.classList.add('scr2-hidden');
+      this.setupEl.classList.remove('scr2-hidden');
     },
 
     applyConfig(msg) {
       this.roundTime = msg.roundTime || 60;
+      this.roundsEach = msg.roundsEach || 5;
+      this.totalRounds = this.roundsEach * 2;
       this.words = Array.isArray(msg.words) && msg.words.length ? msg.words : DEFAULT_WORDS;
 
       this.waitingEl.classList.add('scr2-hidden');
       this.setupEl.classList.add('scr2-hidden');
+      this.endEl.classList.add('scr2-hidden');
       this.gameEl.classList.remove('scr2-hidden');
     },
 
@@ -215,19 +242,26 @@
       this.startedAt = msg.startedAt;
       this.secretWord = null;
 
+      if (msg.round === 0) {
+        this.score = { me: 0, opp: 0 };
+        this.updateScore();
+      }
+
       this.setTool('draw');
       this.clearCanvas();
       this.clearFeed();
 
+      const turnLabel = `Turn ${Math.floor(this.round / 2) + 1}/${this.roundsEach}`;
+
       if (this.isMyDrawingTurn()) {
         this.secretWord = this.words[Math.floor(Math.random() * this.words.length)];
-        this.statusEl.textContent = 'Your turn — draw this! ✏️';
+        this.statusEl.textContent = `Your turn — draw this! ✏️ (${turnLabel})`;
         this.wordEl.textContent = this.secretWord;
         this.wordEl.classList.remove('masked');
         this.setToolbarEnabled(true);
         this.setGuessEnabled(false);
       } else {
-        this.statusEl.textContent = `${this.api.peerNickname || 'Partner'} is drawing…`;
+        this.statusEl.textContent = `Partner is drawing… (${turnLabel})`;
         this.wordEl.textContent = 'Guess what they are drawing!';
         this.wordEl.classList.add('masked');
         this.setToolbarEnabled(false);
@@ -266,16 +300,46 @@
         this.statusEl.textContent = `Time's up! The word was "${this.secretWord}".`;
         this.addFeed(`⏰ Time's up — the word was "${this.secretWord}"`, 'system');
         this.api.send({ type: 'REVEAL', word: this.secretWord });
-        this.scheduleNextRound();
+        this.afterRoundEnd();
       } else {
         this.statusEl.textContent = "Time's up!";
       }
     },
 
-    scheduleNextRound() {
-      if (!this.api.isHost) return;
-      const next = this.round + 1;
-      setTimeout(() => this.beginRound(next), NEXT_ROUND_DELAY_MS);
+    // Called locally by whichever client just found out the round ended
+    // (as drawer, on timeout/correct-guess; as guesser, on receiving that
+    // news). Every call independently works out whether the game is over;
+    // only the room host actually originates the next ROUND_START, but
+    // that's decided here rather than by who happened to be drawing, so
+    // progression doesn't stall when the guest is drawing but the host
+    // is guessing (or vice versa).
+    afterRoundEnd() {
+      const isLastRound = (this.round + 1) >= this.totalRounds;
+      setTimeout(() => {
+        if (isLastRound) {
+          this.endGame();
+        } else if (this.api.isHost) {
+          this.beginRound(this.round + 1);
+        }
+      }, NEXT_ROUND_DELAY_MS);
+    },
+
+    endGame() {
+      this.roundActive = false;
+      this.stopTimer();
+      this.setToolbarEnabled(false);
+      this.setGuessEnabled(false);
+
+      let resultText;
+      if (this.score.me > this.score.opp) resultText = 'You won! 🏆';
+      else if (this.score.me < this.score.opp) resultText = 'Partner won! 🏆';
+      else resultText = "It's a tie!";
+
+      this.endResultEl.textContent = resultText;
+      this.endScoreEl.textContent = `Final score — You ${this.score.me} : ${this.score.opp} Partner`;
+
+      this.gameEl.classList.add('scr2-hidden');
+      this.endEl.classList.remove('scr2-hidden');
     },
 
     // ---------------------------------------------------------------
@@ -295,7 +359,6 @@
       if (!this.isMyDrawingTurn() || !this.roundActive) return;
 
       const norm = this.normalize(text);
-      const peerName = this.api.peerNickname || 'Partner';
 
       if (norm && norm === this.normalize(this.secretWord)) {
         this.roundActive = false;
@@ -303,15 +366,15 @@
         this.score.opp++;
         this.updateScore();
 
-        this.statusEl.textContent = `${peerName} guessed it! 🎉`;
-        this.addFeed(`🎉 ${peerName} guessed "${this.secretWord}"!`, 'correct');
+        this.statusEl.textContent = 'Partner guessed it! 🎉';
+        this.addFeed(`🎉 Partner guessed "${this.secretWord}"!`, 'correct');
         this.setToolbarEnabled(false);
         this.setGuessEnabled(false);
 
         this.api.send({ type: 'CORRECT', word: this.secretWord });
-        this.scheduleNextRound();
+        this.afterRoundEnd();
       } else {
-        this.addFeed(`${peerName}: ${text}`, 'peer');
+        this.addFeed(`Partner: ${text}`, 'peer');
       }
     },
 
@@ -325,6 +388,7 @@
       this.statusEl.textContent = 'Correct! 🎉';
       this.addFeed(`🎉 Correct! The word was "${msg.word}"`, 'correct');
       this.setGuessEnabled(false);
+      this.afterRoundEnd();
     },
 
     receiveReveal(msg) {
@@ -335,6 +399,7 @@
       this.statusEl.textContent = `Time's up! The word was "${msg.word}".`;
       this.addFeed(`⏰ Time's up — the word was "${msg.word}"`, 'system');
       this.setGuessEnabled(false);
+      this.afterRoundEnd();
     },
 
     normalize(v) {
