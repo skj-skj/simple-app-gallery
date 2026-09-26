@@ -1,0 +1,170 @@
+<style>
+  .dnb-wrap {
+    margin: -24px -16px;
+    padding: 14px 10px 20px;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    --dnb-me: #667eea;
+    --dnb-opp: #e0724a;
+    --dnb-line-idle: #d7dbe6;
+    --dnb-dot: #9098ab;
+  }
+  .dnb-wrap * { box-sizing: border-box; }
+  .dnb-hidden { display: none !important; }
+
+  .dnb-status {
+    font-size: 1.02rem; font-weight: 700; margin-bottom: 4px;
+    min-height: 1.3em; color: #2d2d2d;
+  }
+  .dnb-substatus { font-size: 0.82rem; color: #777; margin-bottom: 14px; min-height: 1.2em; }
+  .dnb-score {
+    display: flex; justify-content: center; gap: 18px;
+    font-size: 0.92rem; font-weight: 700; margin-bottom: 16px;
+  }
+  .dnb-score .dnb-me { color: var(--dnb-me); }
+  .dnb-score .dnb-opp { color: var(--dnb-opp); }
+
+  /* ---------- Setup (host picks size) ---------- */
+  .dnb-setup-title { font-weight: 700; margin-bottom: 10px; }
+  .dnb-size-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    max-width: 320px; margin: 0 auto 16px;
+  }
+  .dnb-size-btn {
+    background: #fff; border: 2px solid #d7dbe6; color: #444;
+    border-radius: 10px; padding: 10px 4px; font-size: 0.85rem; font-weight: 700;
+    cursor: pointer; transition: border-color .15s, background .15s, transform .1s;
+  }
+  .dnb-size-btn:hover { border-color: var(--dnb-me); }
+  .dnb-size-btn.selected { border-color: var(--dnb-me); background: #eef0fd; color: var(--dnb-me); }
+  .dnb-size-btn:active { transform: scale(0.94); }
+  .dnb-start-btn { max-width: 240px; margin: 0 auto; }
+  .dnb-waiting-note { color: #888; font-size: 0.85rem; margin-top: 10px; }
+  .dnb-spinner-sm {
+    width: 20px; height: 20px; margin: 10px auto 0;
+    border: 3px solid #e0e5ee; border-top-color: var(--dnb-me);
+    border-radius: 50%; animation: dnb-spin 0.8s linear infinite;
+  }
+  @keyframes dnb-spin { to { transform: rotate(360deg); } }
+
+  /* ---------- Board ---------- */
+  .dnb-board-wrap { display: flex; justify-content: center; margin-bottom: 8px; }
+  .dnb-board {
+    display: grid;
+    width: 100%;
+    max-width: 380px;
+    aspect-ratio: 1 / 1;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+
+  .dnb-dot {
+    position: relative;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .dnb-dot::after {
+    content: '';
+    position: absolute; top: 50%; left: 50%;
+    width: 60%; height: 60%; transform: translate(-50%, -50%);
+    border-radius: 50%; background: var(--dnb-dot);
+  }
+
+  .dnb-box {
+    position: relative;
+    z-index: 0;
+    background: #f4f5fa;
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800;
+    font-size: clamp(0.6rem, 3.4vw, 1.1rem);
+    transition: background .25s, color .25s;
+  }
+  .dnb-box.dnb-owned-me { background: var(--dnb-me); color: #fff; }
+  .dnb-box.dnb-owned-opp { background: var(--dnb-opp); color: #fff; }
+  .dnb-box.dnb-anim-claim { animation: dnb-claim-pop 0.4s ease-out; }
+  @keyframes dnb-claim-pop {
+    0% { transform: scale(0.6); opacity: 0.4; }
+    60% { transform: scale(1.12); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .dnb-edge {
+    position: relative;
+    z-index: 1;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .dnb-edge:disabled { cursor: default; }
+  .dnb-edge .dnb-edge-line {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: var(--dnb-line-idle);
+    border-radius: 3px;
+    transition: background .15s, transform .12s;
+  }
+  .dnb-edge-h .dnb-edge-line { width: 100%; height: 60%; }
+  .dnb-edge-v .dnb-edge-line { width: 60%; height: 100%; }
+  .dnb-edge.dnb-clickable:not(:disabled):hover .dnb-edge-line { background: #b9c0d6; }
+  .dnb-edge.dnb-clickable:not(:disabled):active .dnb-edge-line { transform: translate(-50%, -50%) scale(0.85); }
+  .dnb-edge.dnb-owned-me .dnb-edge-line { background: var(--dnb-me); }
+  .dnb-edge.dnb-owned-opp .dnb-edge-line { background: var(--dnb-opp); }
+  .dnb-edge.dnb-anim-claim .dnb-edge-line { animation: dnb-edge-pop 0.3s ease-out; }
+  @keyframes dnb-edge-pop {
+    0% { transform: translate(-50%, -50%) scale(0.3); }
+    70% { transform: translate(-50%, -50%) scale(1.25); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+  }
+  /* Slightly enlarge the tappable hit area beyond the visual line — dots
+     and boxes have no click handlers, so a little overlap is harmless. */
+  .dnb-edge-h { margin: -5px 0; }
+  .dnb-edge-v { margin: 0 -5px; }
+
+  /* ---------- Game over ---------- */
+  .dnb-gameover {
+    margin-top: 10px; padding: 16px; border-radius: 12px; background: #f4f2fb;
+  }
+  .dnb-gameover h3 { color: #4b3f78; margin-bottom: 6px; font-size: 1.2rem; }
+  .dnb-rematch-btn { max-width: 220px; margin: 12px auto 0; }
+  .dnb-change-size-btn { max-width: 220px; margin: 8px auto 0; background: #eef1f6; color: #555; }
+</style>
+
+<div class="dnb-wrap">
+  <div class="dnb-status" id="dnb-status">Loading…</div>
+  <div class="dnb-substatus" id="dnb-substatus">&nbsp;</div>
+
+  <!-- ============= SETUP (host only picks size) ============= -->
+  <div id="dnb-setup">
+    <div class="dnb-setup-title">Choose a grid size (boxes per side)</div>
+    <div class="dnb-size-grid" id="dnb-size-grid"></div>
+    <button id="dnb-start-btn" class="dnb-start-btn">Start Game</button>
+  </div>
+  <div id="dnb-setup-waiting" class="dnb-waiting-note dnb-hidden">
+    <p><span id="dnb-setup-waiting-name">Partner</span> is choosing the grid size…</p>
+    <div class="dnb-spinner-sm"></div>
+  </div>
+
+  <!-- ============= BATTLE ============= -->
+  <div id="dnb-play" class="dnb-hidden">
+    <div class="dnb-score">
+      <span class="dnb-me">You: <span id="dnb-score-me">0</span></span>
+      <span class="dnb-opp">Partner: <span id="dnb-score-opp">0</span></span>
+    </div>
+    <div class="dnb-board-wrap">
+      <div class="dnb-board" id="dnb-board"></div>
+    </div>
+  </div>
+
+  <!-- ============= GAME OVER ============= -->
+  <div id="dnb-gameover" class="dnb-gameover dnb-hidden">
+    <h3 id="dnb-gameover-title"></h3>
+    <p id="dnb-gameover-sub"></p>
+    <button id="dnb-rematch-btn" class="dnb-rematch-btn">Play Again (same size)</button>
+    <button id="dnb-change-size-btn" class="dnb-change-size-btn dnb-hidden">Choose New Size</button>
+  </div>
+</div>

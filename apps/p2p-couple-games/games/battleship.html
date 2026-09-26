@@ -1,0 +1,245 @@
+<style>
+  .bs-wrap {
+    /* Reclaim #game-root's default padding (24px/16px, set in index.html)
+       so the 10x10 grids get as much width as possible on small phones. */
+    margin: -24px -16px;
+    padding: 14px 10px 20px;
+    max-width: 460px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    --bs-primary: #3a4b63;
+    --bs-primary-dark: #2a3a4f;
+    --bs-hit: #e74c3c;
+    --bs-miss: #6ca8dc;
+    --bs-sunk: #4a1414;
+    --bs-water: #dceafd;
+    --bs-water-dark: #cfe3fa;
+  }
+  .bs-wrap * { box-sizing: border-box; }
+  .bs-hidden { display: none !important; }
+
+  .bs-status {
+    font-size: 1.02rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+    min-height: 1.3em;
+    color: #2d2d2d;
+  }
+  .bs-substatus {
+    font-size: 0.82rem;
+    color: #777;
+    margin-bottom: 12px;
+    min-height: 1.2em;
+  }
+  .bs-score {
+    font-size: 0.85rem;
+    color: #555;
+    margin: 10px 0 14px;
+    font-weight: 600;
+  }
+
+  /* ---------- Placement phase ---------- */
+  .bs-tray {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin-bottom: 10px;
+  }
+  .bs-ship-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: #fff;
+    border: 2px solid var(--bs-primary);
+    color: var(--bs-primary);
+    border-radius: 20px;
+    padding: 6px 11px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .15s, color .15s, transform .1s;
+  }
+  .bs-ship-chip .dots { display: flex; gap: 2px; }
+  .bs-ship-chip .dots span {
+    width: 6px; height: 6px; border-radius: 1px; background: var(--bs-primary);
+  }
+  .bs-ship-chip.selected { background: var(--bs-primary); color: #fff; }
+  .bs-ship-chip.selected .dots span { background: #fff; }
+  .bs-ship-chip.placed { opacity: 0.55; }
+  .bs-ship-chip.placed::after { content: ' ✓'; }
+  .bs-ship-chip:active { transform: scale(0.96); }
+
+  .bs-tools {
+    display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .bs-tools button {
+    width: auto;
+    font-size: 0.8rem;
+    padding: 8px 12px;
+    background: #eef1f6;
+    color: var(--bs-primary-dark);
+    font-weight: 600;
+  }
+  .bs-tools button:hover { background: #e0e5ee; }
+
+  /* ---------- Board grid (shared by placement + battle) ---------- */
+  .bs-board-section { margin-bottom: 18px; }
+  .bs-board-label {
+    font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
+    text-transform: uppercase; color: #888; margin-bottom: 6px;
+  }
+  .bs-grid-outer {
+    display: inline-grid;
+    grid-template-columns: 16px repeat(10, 1fr);
+    grid-template-rows: 16px repeat(10, 1fr);
+    gap: 2px;
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 1;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .bs-grid-outer.bs-grid-small { max-width: 250px; }
+  .bs-axis-label {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem; color: #999; font-weight: 600;
+  }
+  .bs-cell {
+    background: var(--bs-water);
+    border: none;
+    border-radius: 3px;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 1;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem;
+    transition: background .15s, transform .12s;
+    cursor: pointer;
+  }
+  .bs-cell:disabled { cursor: default; }
+  .bs-cell.bs-clickable:not(:disabled):hover { background: var(--bs-water-dark); }
+  .bs-cell.bs-clickable:not(:disabled):active { transform: scale(0.92); }
+
+  .bs-cell.bs-ship { background: var(--bs-primary); }
+  .bs-cell.bs-ship.bs-placing-preview { background: var(--bs-primary-dark); }
+  .bs-cell.bs-invalid-flash { animation: bs-shake 0.3s; background: #f5b7b1 !important; }
+
+  .bs-cell.bs-miss::after {
+    content: ''; width: 34%; height: 34%; border-radius: 50%;
+    background: var(--bs-miss); box-shadow: 0 0 0 2px rgba(255,255,255,0.6) inset;
+  }
+  .bs-cell.bs-hit { background: var(--bs-hit); }
+  .bs-cell.bs-hit::after { content: '💥'; font-size: 0.8em; }
+  .bs-cell.bs-sunk { background: var(--bs-sunk); }
+  .bs-cell.bs-sunk::after { content: '☠️'; font-size: 0.75em; }
+
+  .bs-cell.bs-anim-pop { animation: bs-pop 0.35s ease-out; }
+  .bs-cell.bs-anim-ripple { animation: bs-ripple 0.5s ease-out; }
+  .bs-cell.bs-anim-sunkwave { animation: bs-sunkwave 0.6s ease-out; }
+  .bs-cell.bs-pending { animation: bs-pulse 0.9s ease-in-out infinite; }
+
+  @keyframes bs-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+  }
+  @keyframes bs-pop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.35); }
+    100% { transform: scale(1); }
+  }
+  @keyframes bs-ripple {
+    0% { box-shadow: 0 0 0 0 rgba(108,168,220,0.6); }
+    100% { box-shadow: 0 0 0 10px rgba(108,168,220,0); }
+  }
+  @keyframes bs-sunkwave {
+    0% { box-shadow: 0 0 0 0 rgba(231,76,60,0.7); transform: scale(1); }
+    50% { transform: scale(1.15); }
+    100% { box-shadow: 0 0 0 14px rgba(231,76,60,0); transform: scale(1); }
+  }
+  @keyframes bs-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+
+  .bs-ready-btn { max-width: 260px; margin: 4px auto 0; }
+  .bs-waiting-note {
+    margin-top: 14px; color: #888; font-size: 0.85rem;
+  }
+  .bs-spinner-sm {
+    width: 20px; height: 20px; margin: 10px auto 0;
+    border: 3px solid #e0e5ee; border-top-color: var(--bs-primary);
+    border-radius: 50%; animation: bs-spin 0.8s linear infinite;
+  }
+  @keyframes bs-spin { to { transform: rotate(360deg); } }
+
+  /* ---------- Battle phase ---------- */
+  .bs-sunk-list {
+    font-size: 0.75rem; color: #888; min-height: 1.2em; margin-top: 6px;
+  }
+  .bs-log {
+    font-size: 0.82rem; color: #555; margin-bottom: 4px; min-height: 1.2em;
+  }
+
+  /* ---------- Game over ---------- */
+  .bs-gameover {
+    margin-top: 10px; padding: 16px; border-radius: 12px;
+    background: #f4f2fb;
+  }
+  .bs-gameover h3 { color: var(--bs-primary-dark); margin-bottom: 6px; font-size: 1.2rem; }
+  .bs-rematch-btn { max-width: 220px; margin: 12px auto 0; }
+</style>
+
+<div class="bs-wrap">
+  <div class="bs-status" id="bs-status">Loading…</div>
+  <div class="bs-substatus" id="bs-substatus"></div>
+
+  <!-- ============= PLACEMENT PHASE ============= -->
+  <div id="bs-placement">
+    <div class="bs-tray" id="bs-tray"></div>
+    <div class="bs-tools">
+      <button id="bs-rotate-btn" type="button">⇄ Rotate: <span id="bs-orientation-label">Horizontal</span></button>
+      <button id="bs-random-btn" type="button">🎲 Randomize</button>
+      <button id="bs-clear-btn" type="button">🗑️ Clear</button>
+    </div>
+    <div class="bs-board-section">
+      <div class="bs-grid-outer" id="bs-place-board"></div>
+    </div>
+    <button id="bs-ready-btn" class="bs-ready-btn" disabled>Place all ships to continue</button>
+    <div id="bs-place-waiting" class="bs-waiting-note bs-hidden">
+      <p>Waiting for <span id="bs-place-waiting-name">partner</span> to finish placing ships…</p>
+      <div class="bs-spinner-sm"></div>
+    </div>
+  </div>
+
+  <!-- ============= BATTLE PHASE ============= -->
+  <div id="bs-battle" class="bs-hidden">
+    <div class="bs-log" id="bs-log">&nbsp;</div>
+    <div class="bs-score" id="bs-score"></div>
+
+    <div class="bs-board-section">
+      <div class="bs-board-label">🎯 Partner's Waters</div>
+      <div class="bs-grid-outer" id="bs-attack-board"></div>
+      <div class="bs-sunk-list" id="bs-sunk-opp">&nbsp;</div>
+    </div>
+
+    <div class="bs-board-section">
+      <div class="bs-board-label">🛟 Your Fleet</div>
+      <div class="bs-grid-outer bs-grid-small" id="bs-defense-board"></div>
+      <div class="bs-sunk-list" id="bs-sunk-mine">&nbsp;</div>
+    </div>
+  </div>
+
+  <!-- ============= GAME OVER ============= -->
+  <div id="bs-gameover" class="bs-gameover bs-hidden">
+    <h3 id="bs-gameover-title"></h3>
+    <p id="bs-gameover-sub"></p>
+    <button id="bs-rematch-btn" class="bs-rematch-btn">Play Again</button>
+  </div>
+</div>
