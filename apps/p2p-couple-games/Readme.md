@@ -34,6 +34,9 @@ games/tictactoe.html   Tic Tac Toe markup
 games/tictactoe.js     Tic Tac Toe logic
 games/rps.html         Rock Paper Scissors markup
 games/rps.js           Rock Paper Scissors logic
+games/lazer_link.html  Laser Link markup
+games/lazer_link.js    Laser Link logic (puzzle gen, laser sim, rendering)
+games/assets/lazer_link_sounds.js  Laser Link's Web Audio sound effects
 ```
 
 ## Adding a new game
@@ -100,6 +103,23 @@ or a "Keep Talking"-style timer game)
 - PeerJS's public signalling/STUN server is used (no config needed to run
   it), which is fine for personal use but can occasionally be slow to
   broker the initial connection.
+- **Laser Link** is host-authoritative for both config and puzzle
+  generation (same pattern as Scribble 2 / Dots and Boxes): only the host
+  sees the setup screen, and only the host ever calls `generatePuzzle()` —
+  the guest always receives the finished deterministic puzzle over the
+  wire (`NEW_PUZZLE`) rather than generating its own, so the two sides can
+  never disagree about the board. A guest tapping "New Puzzle" sends
+  `REQUEST_NEW_PUZZLE` and waits for the host to generate and broadcast
+  one. `generatePuzzle()` builds every puzzle solution-first (a valid
+  laser path is walked out and mirrors are placed only where that path
+  needs them; decoys/walls/splitters are scattered only on the remaining
+  cells), then verifies both that the intended solution actually solves it
+  and that the puzzle isn't accidentally *already* solved as generated —
+  discarding and retrying (with a capped attempt count and a trivial
+  fallback puzzle) rather than trusting the construction blindly. "Give
+  Up" requires both players: each side tracks its own give-up state
+  locally and only reveals the solution once both have pressed it, so one
+  partner giving up doesn't spoil it for the other.
 
 ## Testing locally
 

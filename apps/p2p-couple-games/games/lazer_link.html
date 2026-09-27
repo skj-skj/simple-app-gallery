@@ -1,0 +1,265 @@
+<style>
+  .lzl-wrap {
+    margin: -24px -16px;
+    padding: 14px 10px 20px;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    --lzl-me: #667eea;
+    --lzl-opp: #e0724a;
+    --lzl-wall: #4a4f5c;
+    --lzl-splitter: #d4a017;
+    --lzl-source: #2ecc71;
+    --lzl-target: #e74c3c;
+    --lzl-cell-bg: #f4f5fa;
+    --lzl-helper-beam: rgba(102, 126, 234, 0.55);
+    --lzl-solved-beam: #ffd23f;
+  }
+  .lzl-wrap * { box-sizing: border-box; }
+  .lzl-hidden { display: none !important; }
+
+  .lzl-status {
+    font-size: 1.02rem; font-weight: 700; margin-bottom: 4px;
+    min-height: 1.3em; color: #2d2d2d;
+  }
+  .lzl-substatus { font-size: 0.82rem; color: #777; margin-bottom: 14px; min-height: 1.2em; }
+
+  /* ---------- Setup (host picks config) ---------- */
+  .lzl-setup-title { font-weight: 700; margin-bottom: 10px; font-size: 0.92rem; }
+  .lzl-setup-section { margin-bottom: 18px; }
+  .lzl-size-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    max-width: 320px; margin: 0 auto;
+  }
+  .lzl-size-btn {
+    background: #fff; border: 2px solid #d7dbe6; color: #444;
+    border-radius: 10px; padding: 10px 4px; font-size: 0.85rem; font-weight: 700;
+    cursor: pointer; transition: border-color .15s, background .15s, transform .1s;
+  }
+  .lzl-size-btn:hover { border-color: var(--lzl-me); }
+  .lzl-size-btn.selected { border-color: var(--lzl-me); background: #eef0fd; color: var(--lzl-me); }
+  .lzl-size-btn:active { transform: scale(0.94); }
+
+  .lzl-toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 320px; margin: 0 auto 10px; padding: 4px 2px;
+    font-size: 0.88rem; color: #444; text-align: left;
+  }
+  .lzl-toggle {
+    position: relative; width: 52px; height: 30px; flex-shrink: 0;
+    border: none; border-radius: 999px; background: #d7dbe6; cursor: pointer;
+    transition: background .18s;
+  }
+  .lzl-toggle::after {
+    content: ''; position: absolute; top: 3px; left: 3px;
+    width: 24px; height: 24px; border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3); transition: transform .18s;
+  }
+  .lzl-toggle.on { background: var(--lzl-me); }
+  .lzl-toggle.on::after { transform: translateX(22px); }
+  .lzl-toggle:focus-visible { outline: 2px solid var(--lzl-me); outline-offset: 2px; }
+  .lzl-toggle-hint { font-size: 0.72rem; color: #999; max-width: 320px; margin: -6px auto 12px; text-align: left; }
+
+  .lzl-start-btn { max-width: 240px; margin: 6px auto 0; }
+  .lzl-waiting-note { color: #888; font-size: 0.85rem; margin-top: 10px; }
+  .lzl-spinner-sm {
+    width: 20px; height: 20px; margin: 10px auto 0;
+    border: 3px solid #e0e5ee; border-top-color: var(--lzl-me);
+    border-radius: 50%; animation: lzl-spin 0.8s linear infinite;
+  }
+  @keyframes lzl-spin { to { transform: rotate(360deg); } }
+
+  /* ---------- Board ---------- */
+  .lzl-board-wrap {
+    position: relative; display: flex; justify-content: center;
+    margin-bottom: 12px; touch-action: manipulation;
+  }
+  .lzl-board {
+    display: grid;
+    width: 100%;
+    max-width: 380px;
+    aspect-ratio: 1 / 1;
+    gap: 2px;
+    background: #dde0ea;
+    border-radius: 8px;
+    padding: 2px;
+    user-select: none;
+    -webkit-user-select: none;
+    position: relative;
+    z-index: 1;
+  }
+  .lzl-beam-layer {
+    position: absolute; inset: 2px;
+    max-width: 380px; width: calc(100% - 4px); height: calc(100% - 4px);
+    margin: 0 auto; left: 0; right: 0;
+    pointer-events: none;
+    z-index: 2;
+    overflow: visible;
+  }
+  .lzl-helper-line {
+    stroke: var(--lzl-helper-beam);
+    stroke-width: 0.09;
+    stroke-linecap: round;
+    fill: none;
+  }
+  .lzl-solved-line {
+    stroke: var(--lzl-solved-beam);
+    stroke-width: 0.13;
+    stroke-linecap: round;
+    fill: none;
+    filter: drop-shadow(0 0 3px var(--lzl-solved-beam));
+  }
+  .lzl-solution-line {
+    stroke: var(--lzl-splitter);
+    stroke-width: 0.1;
+    stroke-linecap: round;
+    stroke-dasharray: 0.12 0.08;
+    fill: none;
+  }
+
+  .lzl-cell {
+    position: relative;
+    background: var(--lzl-cell-bg);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(0.7rem, 3.6vw, 1.3rem);
+    line-height: 1;
+  }
+
+  /* Source / target markers */
+  .lzl-cell .lzl-icon-source { color: var(--lzl-source); font-weight: 900; }
+  .lzl-cell .lzl-icon-target {
+    color: var(--lzl-target); font-weight: 900;
+    animation: lzl-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes lzl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+  /* Walls: solid dark tile with hatching, distinct shape from mirrors */
+  .lzl-cell.lzl-wall {
+    background: repeating-linear-gradient(45deg, var(--lzl-wall), var(--lzl-wall) 4px, #3a3e48 4px, #3a3e48 8px);
+    border-radius: 3px;
+  }
+
+  /* Splitters: diamond outline, distinct from round/diagonal mirrors */
+  .lzl-cell .lzl-icon-splitter {
+    width: 62%; height: 62%;
+    border: 2px dashed var(--lzl-splitter);
+    transform: rotate(45deg);
+    border-radius: 3px;
+  }
+
+  /* Mirrors: button so they're focusable/tappable; shape (diagonal glyph)
+     carries orientation, color+border style carries ownership, so nothing
+     depends on color alone. */
+  .lzl-mirror-btn {
+    width: 100%; height: 100%; padding: 0; margin: 0;
+    background: transparent; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: clamp(0.9rem, 4.4vw, 1.5rem);
+    border-radius: 3px; -webkit-tap-highlight-color: transparent;
+  }
+  .lzl-mirror-btn:disabled { cursor: default; }
+  .lzl-mirror-btn:focus-visible { outline: 2px solid var(--lzl-me); outline-offset: -2px; }
+  .lzl-mirror-me {
+    color: var(--lzl-me);
+    box-shadow: inset 0 0 0 2px var(--lzl-me);
+  }
+  .lzl-mirror-opp {
+    color: var(--lzl-opp);
+    box-shadow: inset 0 0 0 2px var(--lzl-opp);
+    border-style: dashed;
+  }
+  .lzl-mirror-opp::after {
+    content: ''; position: absolute; inset: 3px;
+    border: 2px dashed var(--lzl-opp); border-radius: 3px; pointer-events: none;
+  }
+  .lzl-mirror-btn.lzl-tapped { animation: lzl-mirror-pop 0.22s ease-out; }
+  @keyframes lzl-mirror-pop {
+    0% { transform: scale(0.75); }
+    70% { transform: scale(1.12); }
+    100% { transform: scale(1); }
+  }
+  .lzl-cell.lzl-solved-path { background: #fff7dd; }
+
+  /* ---------- Legend ---------- */
+  .lzl-legend {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 14px;
+    font-size: 0.72rem; color: #777; margin: 4px 0 14px;
+  }
+  .lzl-legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .lzl-legend .lzl-legend-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  /* ---------- Controls ---------- */
+  .lzl-giveup-btn { max-width: 200px; margin: 0 auto; background: #eef1f6; color: #555; }
+  .lzl-giveup-status { font-size: 0.82rem; color: #888; margin-top: 10px; }
+
+  .lzl-end {
+    margin-top: 10px; padding: 16px; border-radius: 12px; background: #f4f2fb;
+  }
+  .lzl-end h3 { color: #4b3f78; margin-bottom: 6px; font-size: 1.2rem; }
+  .lzl-newpuzzle-btn { max-width: 220px; margin: 12px auto 0; }
+  .lzl-changesettings-btn { max-width: 220px; margin: 8px auto 0; background: #eef1f6; color: #555; }
+</style>
+
+<div class="lzl-wrap">
+  <div class="lzl-status" id="lzl-status">Loading…</div>
+  <div class="lzl-substatus" id="lzl-substatus">&nbsp;</div>
+
+  <!-- ============= SETUP (host only picks config) ============= -->
+  <div id="lzl-setup">
+    <div class="lzl-setup-section">
+      <div class="lzl-setup-title">Grid size</div>
+      <div class="lzl-size-grid" id="lzl-size-grid"></div>
+    </div>
+
+    <div class="lzl-setup-section">
+      <div class="lzl-toggle-row">
+        <span>Walls</span>
+        <button type="button" class="lzl-toggle" id="lzl-toggle-walls" aria-pressed="false"></button>
+      </div>
+      <div class="lzl-toggle-hint">Blocks the beam wherever they're placed.</div>
+
+      <div class="lzl-toggle-row">
+        <span>Splitters</span>
+        <button type="button" class="lzl-toggle" id="lzl-toggle-splitter" aria-pressed="false"></button>
+      </div>
+      <div class="lzl-toggle-hint">Split the beam in two where it hits them.</div>
+
+      <div class="lzl-toggle-row">
+        <span>Show partner's mirrors</span>
+        <button type="button" class="lzl-toggle" id="lzl-toggle-visibility" aria-pressed="false"></button>
+      </div>
+      <div class="lzl-toggle-hint">Off = you only see your own mirrors — talk it through!</div>
+    </div>
+
+    <button id="lzl-start-btn" class="lzl-start-btn">Start Puzzle</button>
+  </div>
+
+  <div id="lzl-setup-waiting" class="lzl-waiting-note lzl-hidden">
+    <p><span id="lzl-setup-waiting-name">Partner</span> is choosing settings…</p>
+    <div class="lzl-spinner-sm"></div>
+  </div>
+
+  <!-- ============= PLAY ============= -->
+  <div id="lzl-play" class="lzl-hidden">
+    <div class="lzl-board-wrap">
+      <div class="lzl-board" id="lzl-board"></div>
+      <svg class="lzl-beam-layer" id="lzl-beam-layer" viewBox="0 0 10 10" preserveAspectRatio="none"></svg>
+    </div>
+
+    <div class="lzl-legend" id="lzl-legend"></div>
+
+    <div id="lzl-controls-active">
+      <button id="lzl-giveup-btn" class="lzl-giveup-btn">Give Up</button>
+      <div id="lzl-giveup-status" class="lzl-giveup-status lzl-hidden"></div>
+    </div>
+
+    <div id="lzl-controls-end" class="lzl-end lzl-hidden">
+      <h3 id="lzl-end-title"></h3>
+      <p id="lzl-end-sub"></p>
+      <button id="lzl-newpuzzle-btn" class="lzl-newpuzzle-btn">New Puzzle</button>
+      <button id="lzl-changesettings-btn" class="lzl-changesettings-btn lzl-hidden">Change Settings</button>
+    </div>
+  </div>
+</div>

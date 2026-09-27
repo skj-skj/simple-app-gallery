@@ -57,6 +57,7 @@
     },
     { id: 'battleship', name: 'Battleship', icon: '🚢', html: 'games/battleship.html', js: 'games/battleship.js' },
     { id: 'dots_and_boxes', name: 'Dots and Boxes', icon: '🔲', html: 'games/dots_and_boxes.html', js: 'games/dots_and_boxes.js' },
+    { id: 'lazer_link', name: 'Laser Link', icon: '🔦', html: 'games/lazer_link.html', js: 'games/lazer_link.js' },
   ];
   
   const ROOM_PREFIX = 'pcg-';
