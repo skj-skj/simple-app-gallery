@@ -1,0 +1,309 @@
+<style>
+  .bf-wrap {
+    margin: -24px -16px;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    --bf-host: #667eea;
+    --bf-guest: #e0724a;
+    --bf-safe: #2fbf71;
+    --bf-fire: #ff5a2a;
+    --bf-ink: #2d2d2d;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .bf-wrap * { box-sizing: border-box; }
+  .bf-hidden { display: none !important; }
+
+  /* ---------- 3D stage ---------- */
+  .bf-stage {
+    position: relative;
+    width: 100%;
+    /* Leave room for the app header + the choice buttons so they stay on
+       screen without scrolling, even on short phones. */
+    height: clamp(250px, calc(100vh - 330px), 540px);
+    height: clamp(250px, calc(100svh - 330px), 540px);
+    overflow: hidden;
+    border-radius: 16px 16px 0 0;
+    background: linear-gradient(180deg, #8fb8ff 0%, #c9dcff 55%, #f3e6ff 100%);
+    touch-action: pan-y;
+  }
+  .bf-stage canvas {
+    position: absolute; inset: 0;
+    width: 100% !important; height: 100% !important;
+    display: block;
+  }
+  #bf-fx { pointer-events: none; }
+
+  /* ---------- HUD ---------- */
+  .bf-hud {
+    position: absolute; top: 8px; left: 8px; right: 8px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 5px;
+    pointer-events: none;
+  }
+  .bf-hud-cell {
+    background: rgba(255,255,255,0.82);
+    border-radius: 10px;
+    padding: 4px 2px 5px;
+    line-height: 1.1;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  }
+  .bf-hud-label { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.06em; color: #6b6b6b; text-transform: uppercase; }
+  .bf-hud-value { font-size: 1.12rem; font-weight: 800; color: var(--bf-ink); font-variant-numeric: tabular-nums; }
+  .bf-hud-time .bf-hud-value { font-size: 1.3rem; }
+  .bf-hud-time.bf-low .bf-hud-value { color: #d62828; animation: bf-pulse 1s ease-in-out infinite; }
+  @keyframes bf-pulse { 50% { transform: scale(1.15); } }
+  .bf-hud-me .bf-hud-value { color: var(--bf-me-color, var(--bf-host)); }
+  .bf-hud-opp .bf-hud-value { color: var(--bf-opp-color, var(--bf-guest)); }
+  .bf-mute-btn {
+    pointer-events: auto;
+    width: 38px; padding: 0; font-size: 1.1rem;
+    background: rgba(255,255,255,0.82); color: #333;
+    border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  }
+  .bf-mute-btn:hover { background: #fff; transform: none; }
+
+  /* Building captions: your building is always on the left */
+  .bf-tags {
+    position: absolute; left: 6px; right: 6px; top: 62px;
+    display: flex; justify-content: space-between; gap: 6px;
+    pointer-events: none;
+  }
+  .bf-tag {
+    font-size: 0.68rem; font-weight: 700; color: #fff;
+    padding: 3px 8px; border-radius: 999px;
+    max-width: 49%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  }
+  .bf-tag-me { background: var(--bf-me-color, var(--bf-host)); }
+  .bf-tag-opp { background: var(--bf-opp-color, var(--bf-guest)); }
+
+  /* Result toast (own jump) */
+  .bf-toast {
+    position: absolute; left: 50%; top: 42%;
+    transform: translate(-50%, -50%) scale(0.8);
+    background: rgba(255,255,255,0.95);
+    border-radius: 14px; padding: 10px 18px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s;
+    min-width: 150px;
+  }
+  .bf-toast.bf-show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .bf-toast-title { font-size: 1.3rem; font-weight: 900; }
+  .bf-toast-delta { font-size: 1.6rem; font-weight: 900; }
+  .bf-toast-sub { font-size: 0.8rem; color: #555; font-weight: 600; }
+  .bf-toast.bf-safe .bf-toast-title, .bf-toast.bf-safe .bf-toast-delta { color: var(--bf-safe); }
+  .bf-toast.bf-fire .bf-toast-title, .bf-toast.bf-fire .bf-toast-delta { color: var(--bf-fire); }
+
+  /* ---------- Overlay panels (config / result / loading) ---------- */
+  .bf-panel {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 14px;
+    background: rgba(40, 30, 80, 0.28);
+    overflow-y: auto;
+  }
+  .bf-card {
+    background: rgba(255,255,255,0.97);
+    border-radius: 16px;
+    padding: 16px 16px 18px;
+    width: 100%; max-width: 330px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    margin: auto;
+  }
+  .bf-title { font-size: 1.35rem; font-weight: 900; color: #4b3f78; letter-spacing: 0.04em; margin-bottom: 2px; }
+  .bf-sub { font-size: 0.78rem; color: #777; margin-bottom: 12px; }
+  .bf-section-label { font-size: 0.8rem; font-weight: 800; color: #555; margin: 8px 0 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .bf-stepper { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .bf-step-btn { width: 48px; height: 48px; padding: 0; font-size: 1.5rem; border-radius: 12px; }
+  .bf-step-val { font-size: 1.8rem; font-weight: 900; min-width: 52px; color: #333; font-variant-numeric: tabular-nums; }
+
+  .bf-opt-row { display: flex; gap: 8px; justify-content: center; }
+  .bf-opt {
+    flex: 1; max-width: 90px;
+    background: #fff; border: 2px solid #d7dbe6; color: #444;
+    border-radius: 10px; padding: 10px 4px; font-size: 0.95rem; font-weight: 800;
+  }
+  .bf-opt:hover { background: #fff; border-color: var(--bf-host); }
+  .bf-opt.bf-on { border-color: var(--bf-host); background: #eef0fd; color: var(--bf-host); }
+  .bf-opt-wide { max-width: 140px; padding: 8px 4px; }
+  .bf-opt small { display: block; font-size: 0.66rem; font-weight: 600; opacity: 0.8; margin-top: 2px; }
+  .bf-opt:disabled { background: #f6f6f6; color: #999; border-color: #e3e3e3; }
+  .bf-opt.bf-on:disabled { background: #eef0fd; color: var(--bf-host); border-color: var(--bf-host); opacity: 0.85; }
+  .bf-step-btn:disabled { opacity: 0.5; }
+
+  .bf-rules {
+    margin-top: 12px; font-size: 0.74rem; color: #555; text-align: left;
+    background: #f4f2fb; border-radius: 10px; padding: 8px 10px; line-height: 1.4;
+  }
+  .bf-rules b { color: #333; }
+  .bf-main-btn { margin-top: 14px; }
+  .bf-note { font-size: 0.78rem; color: #888; margin-top: 8px; min-height: 1em; }
+  .bf-spinner {
+    width: 20px; height: 20px; margin: 8px auto 0;
+    border: 3px solid #e0e5ee; border-top-color: var(--bf-host);
+    border-radius: 50%; animation: bf-spin 0.8s linear infinite;
+  }
+  @keyframes bf-spin { to { transform: rotate(360deg); } }
+
+  /* Result */
+  .bf-result-scores { display: flex; gap: 10px; justify-content: center; margin: 10px 0 6px; }
+  .bf-result-player { flex: 1; border-radius: 12px; padding: 8px 4px; background: #f6f6fa; }
+  .bf-result-name { font-size: 0.78rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bf-result-score { font-size: 1.9rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .bf-result-status { font-size: 0.7rem; color: #666; font-weight: 700; }
+  .bf-result-hist { font-size: 0.8rem; letter-spacing: 1px; min-height: 1.2em; word-break: break-all; }
+  .bf-result-player.bf-winner { background: #fff6d8; box-shadow: inset 0 0 0 2px #f2c94c; }
+  .bf-result-verdict { font-size: 1.25rem; font-weight: 900; color: #4b3f78; margin: 6px 0 2px; }
+  .bf-result-legend { font-size: 0.74rem; color: #666; margin-top: 4px; }
+  .bf-legend-safe { color: var(--bf-safe); font-weight: 800; }
+  .bf-legend-fire { color: var(--bf-fire); font-weight: 800; }
+  .bf-secondary-btn { margin-top: 8px; background: #eef1f6; color: #555; }
+  .bf-secondary-btn:hover { background: #e3e7ef; }
+
+  .bf-loading { background: rgba(255,255,255,0.35); color: #4b3f78; font-weight: 700; flex-direction: column; }
+
+  /* ---------- Controls ---------- */
+  .bf-controls { padding: 10px 10px 14px; }
+  .bf-status { font-size: 0.92rem; font-weight: 800; color: var(--bf-ink); min-height: 1.3em; }
+  .bf-choice-label { font-size: 0.8rem; color: #666; min-height: 1.2em; margin: 2px 0 8px; }
+  .bf-choice-label b { color: #333; }
+  .bf-btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .bf-choice {
+    min-height: 64px;
+    padding: 8px 2px;
+    font-size: 1rem; font-weight: 900; letter-spacing: 0.04em;
+    background: #fff; color: #444;
+    border: 3px solid #d7dbe6;
+    border-radius: 14px;
+    touch-action: manipulation;
+    transition: transform .08s, background .15s, border-color .15s, color .15s;
+  }
+  .bf-choice:hover { background: #fff; transform: none; }
+  .bf-choice:active:not(:disabled) { transform: scale(0.95); }
+  .bf-choice .bf-choice-icon { display: block; font-size: 1.1rem; line-height: 1; margin-bottom: 3px; }
+  .bf-choice.bf-selected {
+    background: var(--bf-me-color, var(--bf-host)); color: #fff;
+    border-color: var(--bf-me-color, var(--bf-host));
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  }
+  .bf-choice.bf-nearest { border-style: dashed; border-color: var(--bf-me-color, var(--bf-host)); color: var(--bf-me-color, var(--bf-host)); }
+  .bf-choice:disabled { background: #f3f3f5; color: #aaa; border-color: #e3e3e8; cursor: default; }
+  .bf-choice.bf-final:disabled {
+    background: var(--bf-me-color, var(--bf-host)); color: #fff;
+    border-color: #222; border-style: solid;
+  }
+  .bf-hint { font-size: 0.7rem; color: #999; margin-top: 8px; }
+  @media (max-height: 700px) {
+    .bf-hint { display: none; }
+    .bf-choice { min-height: 56px; }
+    .bf-controls { padding-bottom: 10px; }
+  }
+</style>
+
+<div class="bf-wrap" id="bf-wrap">
+  <div class="bf-stage" id="bf-stage">
+    <canvas id="bf-3d"></canvas>
+    <canvas id="bf-fx"></canvas>
+
+    <div class="bf-hud">
+      <div class="bf-hud-cell"><div class="bf-hud-label">Floor</div><div class="bf-hud-value" id="bf-hud-floor">–</div></div>
+      <div class="bf-hud-cell bf-hud-time" id="bf-hud-time-cell"><div class="bf-hud-label">Time</div><div class="bf-hud-value" id="bf-hud-time">–</div></div>
+      <div class="bf-hud-cell bf-hud-me"><div class="bf-hud-label">Your score</div><div class="bf-hud-value" id="bf-hud-me">0</div></div>
+      <div class="bf-hud-cell bf-hud-opp"><div class="bf-hud-label" id="bf-hud-opp-label">Other player</div><div class="bf-hud-value" id="bf-hud-opp">0</div></div>
+      <button type="button" class="bf-mute-btn" id="bf-mute-btn" aria-label="Toggle sound">🔊</button>
+    </div>
+
+    <div class="bf-tags">
+      <span class="bf-tag bf-tag-me" id="bf-tag-me">YOU · fire hidden ❓</span>
+      <span class="bf-tag bf-tag-opp" id="bf-tag-opp">PARTNER · fire visible 👁</span>
+    </div>
+
+    <div class="bf-toast" id="bf-toast">
+      <div class="bf-toast-title" id="bf-toast-title"></div>
+      <div class="bf-toast-delta" id="bf-toast-delta"></div>
+      <div class="bf-toast-sub" id="bf-toast-sub"></div>
+    </div>
+
+    <!-- ============= CONFIGURATION ============= -->
+    <div class="bf-panel" id="bf-config">
+      <div class="bf-card">
+        <div class="bf-title">🏢 BUILDING FALL</div>
+        <div class="bf-sub" id="bf-config-sub">Host picks the settings</div>
+
+        <div class="bf-section-label">Number of floors</div>
+        <div class="bf-stepper">
+          <button type="button" class="bf-step-btn" id="bf-floors-minus" aria-label="Fewer floors">−</button>
+          <span class="bf-step-val" id="bf-floors-val">10</span>
+          <button type="button" class="bf-step-btn" id="bf-floors-plus" aria-label="More floors">+</button>
+        </div>
+
+        <div class="bf-section-label">Floor timer</div>
+        <div class="bf-opt-row" id="bf-timer-opts"></div>
+
+        <div class="bf-section-label">Difficulty</div>
+        <div class="bf-opt-row" id="bf-diff-opts"></div>
+
+        <div class="bf-rules">
+          Every floor has <b>3 openings</b> — <span id="bf-rules-split">1 safe, 2 on fire</span>.<br>
+          You <b>can't</b> see your own fire. Your partner <b>can</b> — and you can see theirs.<br>
+          Talk, trust… or lie. <b>Safe +10</b> · <b>Fire −5</b> (and you're out).
+        </div>
+
+        <button type="button" class="bf-main-btn" id="bf-start-btn">START GAME</button>
+        <div class="bf-note" id="bf-config-note"></div>
+        <div class="bf-spinner bf-hidden" id="bf-config-spinner"></div>
+      </div>
+    </div>
+
+    <!-- ============= RESULT ============= -->
+    <div class="bf-panel bf-hidden" id="bf-result">
+      <div class="bf-card">
+        <div class="bf-title">GAME OVER</div>
+        <div class="bf-result-verdict" id="bf-result-verdict"></div>
+        <div class="bf-result-scores">
+          <div class="bf-result-player" id="bf-result-me">
+            <div class="bf-result-name" id="bf-result-me-name">You</div>
+            <div class="bf-result-score" id="bf-result-me-score">0</div>
+            <div class="bf-result-status" id="bf-result-me-status"></div>
+            <div class="bf-result-hist" id="bf-result-me-hist"></div>
+          </div>
+          <div class="bf-result-player" id="bf-result-opp">
+            <div class="bf-result-name" id="bf-result-opp-name">Partner</div>
+            <div class="bf-result-score" id="bf-result-opp-score">0</div>
+            <div class="bf-result-status" id="bf-result-opp-status"></div>
+            <div class="bf-result-hist" id="bf-result-opp-hist"></div>
+          </div>
+        </div>
+        <div class="bf-result-legend" id="bf-result-mode"></div>
+        <div class="bf-result-legend">
+          Score = <span class="bf-legend-safe">Safe jump +10</span> · <span class="bf-legend-fire">Fire jump −5</span>
+        </div>
+        <button type="button" class="bf-main-btn" id="bf-again-btn">PLAY AGAIN</button>
+        <button type="button" class="bf-secondary-btn" id="bf-config-btn">CONFIGURATION</button>
+        <div class="bf-note" id="bf-result-note"></div>
+      </div>
+    </div>
+
+    <!-- ============= LOADING / ERROR ============= -->
+    <div class="bf-panel bf-loading" id="bf-loading">
+      <div id="bf-loading-text">Loading 3D…</div>
+      <div class="bf-spinner"></div>
+    </div>
+  </div>
+
+  <div class="bf-controls">
+    <div class="bf-status" id="bf-status">&nbsp;</div>
+    <div class="bf-choice-label" id="bf-choice-label">&nbsp;</div>
+    <div class="bf-btns">
+      <button type="button" class="bf-choice" data-idx="0" disabled><span class="bf-choice-icon">◀</span>LEFT</button>
+      <button type="button" class="bf-choice" data-idx="1" disabled><span class="bf-choice-icon">●</span>CENTER</button>
+      <button type="button" class="bf-choice" data-idx="2" disabled><span class="bf-choice-icon">▶</span>RIGHT</button>
+    </div>
+    <div class="bf-hint">Change your mind as often as you like until the timer hits 0. Drag on the scene to shuffle between openings.</div>
+  </div>
+</div>

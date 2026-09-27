@@ -15,6 +15,7 @@ step, just the two browsers talking to each other.
 | 🚢 Battleship | Turn-based | Classic 10×10 grid and 5-ship fleet; turns alternate every shot (no extra shot on a hit). |
 | 🔲 Dots and Boxes | Turn-based | Host picks the board size (3×3 to 10×10); completing a box gives you another turn. |
 | 🔦 Laser Link | Co-op puzzle | Each player controls half the mirrors on a shared grid and only sees their own, so you have to talk it through to guide the beam to the target. |
+| 🏢 Building Fall | Simultaneous, timed | 3D trust-or-betray game. Each floor has 3 openings; you can't see which of yours are on fire, but you can see your partner's. Host picks floors (3–20), timer (30/60/90 s) and difficulty (Easy: 2 safe + 1 fire, Hard: 1 safe + 2 fire). Safe +10, fire −5 and you're out; highest score wins. |
 
 ## How it works
 
@@ -62,9 +63,11 @@ games/scribble2.html / .js           Scribble 2 (drawing canvas, rounds, word pi
 games/battleship.html / .js          Battleship
 games/dots_and_boxes.html / .js      Dots and Boxes
 games/lazer_link.html / .js          Laser Link (puzzle gen, laser sim, rendering)
+games/building_fall.html / .js       Building Fall (3D scene, floor timer, jump resolution)
 games/assets/scribble-word-list.json Scribble 2's categorised word list
 games/assets/battleship_sounds.js    Battleship's Web Audio sound effects
 games/assets/lazer_link_sounds.js    Laser Link's Web Audio sound effects
+games/assets/building_fall_sounds.js Building Fall's Web Audio sound effects
 ```
 
 ## Running it
@@ -177,6 +180,68 @@ run the same simulation on the same synced mirror state.
 the solution is shown only once both have pressed it, so one partner giving
 up doesn't spoil the puzzle for the other.
 
+### Building Fall
+
+Each player stands on top of their own building (yours is always drawn on
+the left). Every floor has three openings, **LEFT / CENTER / RIGHT**. You
+can't see which of *your* openings are on fire, but you can see your
+partner's, so the only way to know is to ask. Your partner can tell you
+the truth or lie.
+
+- **Settings (host only):** floors (3–20, default 10), floor timer
+  (`TIMER_OPTIONS = [30, 60, 90]`) and difficulty (`DIFFICULTIES`:
+  **Easy** has 2 safe openings and 1 fire per floor, **Hard** has 1 safe
+  and 2 fire). The guest sees the settings update live. **Start** only
+  unlocks once the guest has opened the game and loaded the 3D engine.
+- **Choosing:** tap LEFT / CENTER / RIGHT as often as you like, or drag
+  on the scene to move between openings. Your current pick is never sent
+  to your partner. When the timer hits 0, the opening nearest to where you
+  are standing is used, so standing between two openings still picks one.
+- **Scoring:** safe jump **+10** and you drop a floor. Fire jump **−5**
+  and you're out, but you keep your score and can keep guiding your
+  partner. The game ends when both players are either on the ground or
+  out. The higher score wins, with a draw on equal scores. It's never an
+  automatic win just because the other player got burned.
+- **Rematch:** *Play Again* (either player) keeps the settings and rolls
+  new buildings. *Configuration* (host) goes back to the settings.
+
+**Sync.** The host is authoritative. It rolls both layouts, starts each
+floor, collects the two final choices and resolves them. Messages:
+`HELLO`, `CONFIG`, `GAME_STARTED`, `FLOOR_STARTED`, `CHOICE`,
+`FLOOR_RESOLVED` (per-player outcome with `PLAYER_JUMPED`, `PLAYER_SAFE` /
+`PLAYER_FIRE`, `PLAYER_ELIMINATED`, `PLAYER_REACHED_BOTTOM`),
+`GAME_FINISHED`, `REMATCH_REQUEST`, `BACK_TO_CONFIG` and
+`TIME_REQ` / `TIME_RES`. The 3D scene is never synced; each side animates
+the events itself.
+
+- **Secrets:** the guest receives the host's layout, which it is meant to
+  see, but not its own. Each of its floors is revealed in
+  `FLOOR_RESOLVED` after the jump, and the full layout comes with
+  `GAME_FINISHED`. The guest sends its `CHOICE` only when its timer ends.
+- **Timer:** `FLOOR_STARTED` carries the deadline in host time. The guest
+  converts it using a clock offset measured with a few `TIME_REQ` /
+  `TIME_RES` round trips, so the countdowns end together even when the
+  phones' clocks disagree. If the guest's `CHOICE` hasn't arrived 4 s after
+  the deadline, the host uses the column the guest is standing in.
+- **Duplicates / delays:** every message carries `gameNo` (and `round`).
+  Stale or repeated ones are ignored. Scores come from the host's snapshot
+  as absolute values, so a repeated message can't award points twice. If
+  either player re-opens the game mid-match, both go back to the settings.
+
+**Libraries.** Three.js 0.186.1 renders the 3D scene. KAPLAY 3001.0.19
+drives the frame loop and a transparent 2D overlay for the floating
++10 / −5 text, sparks and confetti. Both are loaded from jsDelivr with
+`import()` the first time the game opens, with no build step. If KAPLAY
+fails to load, a plain `requestAnimationFrame` loop is used without the
+overlay. KAPLAY's own AudioContext is kept suspended, because all sound
+comes from `building_fall_sounds.js`.
+
+**Sound.** `games/assets/building_fall_sounds.js` synthesises every sound
+with Web Audio, with no audio files. The sounds are short and quiet
+because players are usually on a voice call. The context is unlocked on
+the first tap and suspended after a few idle seconds or when the tab is
+hidden. There's a 🔊/🔇 toggle in the HUD, saved in `localStorage`.
+
 ## Known limitations
 
 Most of these are kept simple on purpose for a casual game between two
@@ -200,6 +265,12 @@ people who trust each other.
 - **Picking a game at the same moment.** If both players tap a different
   game at the same instant, each side can end up in the other's pick.
   Going back to the grid and picking again fixes it.
+- **Building Fall in the background.** If a player switches apps (for
+  example to the call app) the browser may pause timers or drop the
+  connection, especially on iOS. The host still resolves each floor at
+  most 4 s after the deadline, but keep the game in the foreground while
+  playing. The host's browser also holds both layouts, so a host with dev
+  tools could peek at their own fire.
 - **Not cheat-proof.** Rock Paper Scissors has no commit/reveal step, so
   someone who deliberately waits could see your move first (see the
   comment in `games/rps.js` for how to harden it). Battleship trusts each
