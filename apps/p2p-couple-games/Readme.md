@@ -2,48 +2,98 @@
 
 A tiny serverless, peer-to-peer game hub for two people. One person creates
 a room, sends the link to the other, and they play directly over WebRTC
-(via [PeerJS](https://peerjs.com/)) — no backend, no game server, just the
-two browsers talking to each other.
+(via [PeerJS](https://peerjs.com/)) — no backend, no game server, no build
+step, just the two browsers talking to each other.
+
+## Games
+
+| Game | Type | Notes |
+| --- | --- | --- |
+| ❌⭕ Tic Tac Toe | Turn-based | Host is X, guest is O; starting player alternates each rematch. |
+| ✊✋✌️ Rock Paper Scissors | Simultaneous pick | Trust-based, see [Known limitations](#known-limitations). |
+| 🖌️ Scribble 2 | Draw & guess | Host picks round time (30–120 s), rounds each (3–10) and word categories or a custom list. Players take turns drawing; the drawer picks from 3 words. |
+| 🚢 Battleship | Turn-based | Classic 10×10 grid and 5-ship fleet; turns alternate every shot (no extra shot on a hit). |
+| 🔲 Dots and Boxes | Turn-based | Host picks the board size (3×3 to 10×10); completing a box gives you another turn. |
+| 🔦 Laser Link | Co-op puzzle | Each player controls half the mirrors on a shared grid and only sees their own, so you have to talk it through to guide the beam to the target. |
 
 ## How it works
 
-- **Room = a short code.** The host's PeerJS peer ID is `pcg-<CODE>`. The
-  guest generates a random peer ID and connects directly to `pcg-<CODE>`.
+- **Room = a short code.** Creating a room generates a 5-character code
+  (ambiguous characters like `0/O` and `1/I` are left out). The host's
+  PeerJS peer ID is `pcg-<CODE>`; the guest gets a random peer ID and
+  connects directly to `pcg-<CODE>`.
+- **Share link.** The room lives in the URL as `?room=<CODE>`. Opening that
+  link joins as the guest. The host's browser remembers the room it created
+  (in `localStorage`), so if the **host** reloads the page it re-opens the
+  same room instead of trying to join it.
+- **Nicknames** are optional and saved in `localStorage` for next time.
 - **One data connection, two message "scopes".** Every message sent over
   the WebRTC data channel looks like `{ scope: 'core' | 'game', ... }`.
-  - `core` messages are handled by `app.js` itself: handshake (`HELLO`),
-    which game is active (`SELECT_GAME` / `LEAVE_GAME`), and a lightweight
-    ping/pong for the latency readout in the status bar.
-  - `game` messages are stamped with the active `gameId` and forwarded
-    straight to whichever game module is mounted.
+  - `core` messages are handled by `app.js` itself: the nickname handshake
+    (`HELLO` / `HELLO_ACK`), which game is active (`SELECT_GAME` /
+    `LEAVE_GAME`), and a `PING` / `PONG` every 4 seconds for the latency
+    readout in the status bar.
+  - `game` messages carry the active `gameId` and are delivered only to
+    the game that's currently open. Messages for any other game are
+    dropped.
+- **Either player can pick a game.** Picking one opens it locally and sends
+  `SELECT_GAME`, so the other side opens the same game. "Back to games"
+  sends `LEAVE_GAME` and takes both players back to the grid.
 - **Games are self-contained.** Each game is one HTML fragment (markup +
   scoped `<style>`) and one JS file that registers itself on
   `window.GameModules`. `app.js` fetches the fragment into `#game-root`,
-  lazy-loads the script once, then calls `init(api)`.
-- Because it's a plain WebRTC data channel (not polling a server), latency
-  is just your direct peer-to-peer round trip — normally tens of
-  milliseconds.
+  loads the script the first time the game is opened, then calls
+  `init(api)`.
+- Because it's a direct WebRTC data channel (not polling a server), the
+  latency is your peer-to-peer round trip, usually tens of milliseconds.
+  The PeerJS server is only used to set up the connection.
 
 ## Files
 
 ```
-index.html            structure + all shared styles (lobby, waiting room,
-                       game grid, game screen, status bar)
-app.js                 PeerJS setup, reconnection, message bus, game loader
-games/tictactoe.html   Tic Tac Toe markup
-games/tictactoe.js     Tic Tac Toe logic
-games/rps.html         Rock Paper Scissors markup
-games/rps.js           Rock Paper Scissors logic
-games/lazer_link.html  Laser Link markup
-games/lazer_link.js    Laser Link logic (puzzle gen, laser sim, rendering)
-games/assets/lazer_link_sounds.js  Laser Link's Web Audio sound effects
+index.html                           page structure + all shared styles (lobby,
+                                     waiting room, game grid, game screen,
+                                     status bar); loads PeerJS 1.5.4 from jsDelivr
+app.js                               PeerJS setup, reconnection, message bus,
+                                     game registry (GAMES) and loader
+games/tictactoe.html / .js           Tic Tac Toe
+games/rps.html / .js                 Rock Paper Scissors
+games/scribble2.html / .js           Scribble 2 (drawing canvas, rounds, word picker)
+games/battleship.html / .js          Battleship
+games/dots_and_boxes.html / .js      Dots and Boxes
+games/lazer_link.html / .js          Laser Link (puzzle gen, laser sim, rendering)
+games/assets/scribble-word-list.json Scribble 2's categorised word list
+games/assets/battleship_sounds.js    Battleship's Web Audio sound effects
+games/assets/lazer_link_sounds.js    Laser Link's Web Audio sound effects
 ```
+
+## Running it
+
+It's all static files, but it **must be served over HTTP(S)**. Opening
+`index.html` straight from disk (`file://`) won't work, because games are
+loaded with `fetch()`.
+
+```bash
+cd apps/p2p-couple-games
+python3 -m http.server 8080
+```
+
+Open `http://localhost:8080` in two browser windows, or two different
+browsers, to test both roles. To test with a phone, the page has to be
+served over **HTTPS** (for example a deployed copy, or a tunnel like
+`ngrok` / `cloudflared`). Plain `http://<your-LAN-IP>:8080` is not a secure
+context, so the **Copy** link buttons won't work there.
+
+Both devices need internet access. PeerJS itself is loaded from a CDN, and
+the connection is set up through PeerJS's free public server, even when
+both devices are on the same network.
 
 ## Adding a new game
 
-1. Create `games/<id>.html` — just markup plus a `<style>` block scoped
-   with a unique class prefix (e.g. `.scribble-*`) so it can't clash with
-   other games' styles.
+1. Create `games/<id>.html` with just the markup and a `<style>` block.
+   Prefix every class with something unique to your game (for example
+   `.mygame-*`, like the existing `.s2-*`, `.lzl-*`), so it can't clash
+   with other games' styles.
 2. Create `games/<id>.js` implementing the contract:
 
    ```js
@@ -58,8 +108,8 @@ games/assets/lazer_link_sounds.js  Laser Link's Web Audio sound effects
          //                         unsubscribe function
        },
        destroy() {
-         // optional: clear timers/intervals, etc. Message listeners are
-         // unsubscribed automatically by app.js, you don't need to do that.
+         // optional: clear timers/intervals, stop audio, etc. Message
+         // listeners are removed automatically by app.js.
        },
      };
      window.GameModules = window.GameModules || {};
@@ -67,68 +117,90 @@ games/assets/lazer_link_sounds.js  Laser Link's Web Audio sound effects
    })();
    ```
 
-3. Add one line to the `GAMES` array at the top of `app.js`:
+   Notes on the contract:
+   - The same module object is reused every time the game is opened, so
+     `init()` must fully reset its state rather than assume a fresh object.
+   - `api.peerNickname` is fixed when the game is opened. If a game is
+     opened in the first moments after connecting, it may still be the
+     default `"Partner"`.
+   - Extra assets (sounds, word lists, …) go in `games/assets/` and are
+     loaded by the game itself. See `battleship.js` / `scribble2.js`.
+
+3. Add one entry to the `GAMES` array at the top of `app.js`:
 
    ```js
    { id: '<id>', name: 'Display Name', icon: '🎲', html: 'games/<id>.html', js: 'games/<id>.js' },
    ```
 
-That's the whole integration surface — the grid, loading, and message
-routing all pick up the new entry automatically.
+That's the whole integration surface. The grid, loading and message routing
+all pick up the new entry automatically.
 
-### Design notes for games with real-time/continuous input (e.g. a Scribble
-or a "Keep Talking"-style timer game)
+### Patterns the existing games use
 
-- For turn-based games, `api.send`/`api.onMessage` as-is (reliable, ordered)
-  is fine.
-- For something continuous like a drawing canvas, you may want to throttle
-  `api.send` calls (e.g. send a point every ~30ms instead of on every
-  `mousemove`) rather than adding a new transport — PeerJS's default
-  reliable/ordered channel is already low latency for this scale of data.
-- For a countdown/timer game, keep the timer's *start timestamp* in the
-  synced state (send it once) and have each side compute remaining time
-  locally from `Date.now() - startedAt`, rather than ticking down
-  independently — that avoids the two clocks drifting apart.
+- **Host-authoritative setup.** When a game has options (board size, round
+  time, word list) or random generation, only the host shows the setup
+  screen and sends the result (for example `CONFIG`, `ROUND_START`,
+  `NEW_PUZZLE`). The guest only applies it. This way the two sides can
+  never disagree. Dots and Boxes, Scribble 2 and Laser Link all work this
+  way. If the guest wants a new puzzle or round, it asks the host (for
+  example Laser Link's `REQUEST_NEW_PUZZLE`) instead of generating its own.
+- **Send actions, not state.** Turn-based games send only the move
+  (`MOVE`, `CLAIM_EDGE`, `FIRE`, `MIRROR_ROTATE`). Both sides apply it with
+  the same rules and work out scores, turns and the win themselves. With
+  strict turn-taking over a reliable, ordered channel, both sides stay in
+  sync.
+- **Deterministic turn order.** Who starts is worked out from a shared
+  `round` counter (the host starts on even rounds and the guest on odd
+  ones), so no extra message is needed to agree on it.
+- **Keep secrets local.** Battleship never sends ship positions, only shots
+  and hit/miss results. Scribble 2 never sends the secret word.
+- **Continuous input.** Throttle it instead of adding a new transport.
+  Scribble 2 groups drawing points and sends them every 40 ms
+  (`MOVE_SEND_MS`). PeerJS's default reliable, ordered channel is fast
+  enough for this.
+- **Timers.** Send the start timestamp once and have each side compute the
+  remaining time locally from `Date.now() - startedAt`, rather than both
+  sides ticking down on their own and drifting apart.
 
-## Known limitations (kept simple on purpose)
+### Laser Link puzzle generation
 
-- If the connection drops mid-game, the guest auto-retries connecting for
-  about 20 seconds; if it succeeds, the current game is **not** resumed
-  mid-state — it's simplest to just re-pick it from the grid. Adding full
-  state resync is possible but wasn't worth the complexity for a casual
-  couple's game.
-- Rock Paper Scissors has no commit/reveal handshake, so it isn't
-  cheat-proof against someone deliberately stalling to see your move first.
-  See the comment in `games/rps.js` if you ever want to harden that.
-- PeerJS's public signalling/STUN server is used (no config needed to run
-  it), which is fine for personal use but can occasionally be slow to
-  broker the initial connection.
-- **Laser Link** is host-authoritative for both config and puzzle
-  generation (same pattern as Scribble 2 / Dots and Boxes): only the host
-  sees the setup screen, and only the host ever calls `generatePuzzle()` —
-  the guest always receives the finished deterministic puzzle over the
-  wire (`NEW_PUZZLE`) rather than generating its own, so the two sides can
-  never disagree about the board. A guest tapping "New Puzzle" sends
-  `REQUEST_NEW_PUZZLE` and waits for the host to generate and broadcast
-  one. `generatePuzzle()` builds every puzzle solution-first (a valid
-  laser path is walked out and mirrors are placed only where that path
-  needs them; decoys/walls/splitters are scattered only on the remaining
-  cells), then verifies both that the intended solution actually solves it
-  and that the puzzle isn't accidentally *already* solved as generated —
-  discarding and retrying (with a capped attempt count and a trivial
-  fallback puzzle) rather than trusting the construction blindly. "Give
-  Up" requires both players: each side tracks its own give-up state
-  locally and only reveals the solution once both have pressed it, so one
-  partner giving up doesn't spoil it for the other.
+`generatePuzzle()` (host only) builds each puzzle solution-first. It walks
+out a valid source → target laser path, places mirrors only where that path
+turns, then scatters decoy mirrors, walls and splitters on the remaining
+cells. It then runs the real `traceLaser()` check to confirm the intended
+solution works and that the scrambled starting board isn't already solved.
+It retries up to 80 times and falls back to a trivial puzzle, so it can
+never get stuck. The beam itself is never sent over the network: both sides
+run the same simulation on the same synced mirror state.
 
-## Testing locally
+"Give Up" needs both players. Each side tracks its own give-up locally, and
+the solution is shown only once both have pressed it, so one partner giving
+up doesn't spoil the puzzle for the other.
 
-Any static file server works, e.g.:
+## Known limitations
 
-```bash
-cd apps/p2p-couple-games
-python3 -m http.server 8080
-```
+Most of these are kept simple on purpose for a casual game between two
+people who trust each other.
 
-Open `http://localhost:8080` in two different browsers/tabs (or one tab
-+ your phone) to test both roles.
+- **Reconnection is basic.** If the connection drops, the guest retries
+  automatically 8 times, 2.5 s apart (about 20 s). After that the page
+  shows an error and you'll need to rejoin. After a successful reconnect,
+  both sides land back on the game grid, and the game you were in is
+  **not** restored. Just pick it again. The host doesn't retry anything;
+  it just keeps the room open for the guest to come back.
+- **Rooms aren't locked to two people.** The host accepts any incoming
+  connection, so anyone with the code or link can connect, and the newest
+  connection takes over. Share the link only with the person you're
+  playing with.
+- **No TURN server.** Only PeerJS's default public signalling server and
+  STUN are used, with no TURN relay. That's fine on most home Wi-Fi and
+  mobile networks, but on strict corporate, school or some carrier (CGNAT)
+  networks, the connection may never be set up. The public server can also
+  sometimes be slow to broker the first connection.
+- **Picking a game at the same moment.** If both players tap a different
+  game at the same instant, each side can end up in the other's pick.
+  Going back to the grid and picking again fixes it.
+- **Not cheat-proof.** Rock Paper Scissors has no commit/reveal step, so
+  someone who deliberately waits could see your move first (see the
+  comment in `games/rps.js` for how to harden it). Battleship trusts each
+  player to report hits on their own board honestly.
