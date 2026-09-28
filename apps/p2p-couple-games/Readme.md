@@ -15,7 +15,7 @@ step, just the two browsers talking to each other.
 | 🚢 Battleship | Turn-based | Classic 10×10 grid and 5-ship fleet; turns alternate every shot (no extra shot on a hit). |
 | 🔲 Dots and Boxes | Turn-based | Host picks the board size (3×3 to 10×10); completing a box gives you another turn. |
 | 🔦 Laser Link | Co-op puzzle | Each player controls half the mirrors on a shared grid and only sees their own, so you have to talk it through to guide the beam to the target. |
-| 🏢 Building Fall | Simultaneous, timed | 3D trust-or-betray game. Each floor has 3 openings; you can't see which of yours are on fire, but you can see your partner's. Host picks floors (3–20), timer (30/60/90 s) and difficulty (Easy: 2 safe + 1 fire, Hard: 1 safe + 2 fire). Safe +10, fire −5 and you're out; highest score wins. |
+| 🏢 Building Fall | Simultaneous, timed | 3D trust-or-betray game. Each floor has 3 openings; you can't see which of yours are on fire, but you can see your partner's. Host picks floors (3–20), timer (30/60/90 s) and difficulty (Easy: 2 safe + 1 fire, Hard: 1 safe + 2 fire). Every jump drops a floor: safe +10, fire −5 (your character darkens a little per fire). Both play to the ground; highest score wins. |
 
 ## How it works
 
@@ -194,22 +194,25 @@ the truth or lie.
   and 2 fire). The guest sees the settings update live. **Start** only
   unlocks once the guest has opened the game and loaded the 3D engine.
 - **Choosing:** tap LEFT / CENTER / RIGHT as often as you like, or drag
-  on the scene to move between openings. Your current pick is never sent
-  to your partner. When the timer hits 0, the opening nearest to where you
-  are standing is used, so standing between two openings still picks one.
-- **Scoring:** safe jump **+10** and you drop a floor. Fire jump **−5**
-  and you're out, but you keep your score and can keep guiding your
-  partner. The game ends when both players are either on the ground or
-  out. The higher score wins, with a draw on equal scores. It's never an
-  automatic win just because the other player got burned.
+  on the scene to move between openings. Your character moves on **both**
+  screens as you do, so your partner can guide you ("left… a bit more…
+  stop!"). When the timer hits 0, the opening nearest to where you are
+  standing is used, so standing between two openings still picks one.
+- **Scoring:** every jump drops you one floor. Safe jump **+10**, fire
+  jump **−5**. Fire never takes you out of the game: the character bursts
+  into flames for a moment and stays a little darker. The darkness is
+  `fires / floors`, so a player who hit fire on every floor ends up
+  darkest. Both players always play all the way to the ground; the higher
+  score wins, with a draw on equal scores.
+- **Names:** the game always says "You" and "Partner", on both screens.
 - **Rematch:** *Play Again* (either player) keeps the settings and rolls
   new buildings. *Configuration* (host) goes back to the settings.
 
 **Sync.** The host is authoritative. It rolls both layouts, starts each
 floor, collects the two final choices and resolves them. Messages:
-`HELLO`, `CONFIG`, `GAME_STARTED`, `FLOOR_STARTED`, `CHOICE`,
+`HELLO`, `CONFIG`, `GAME_STARTED`, `FLOOR_STARTED`, `POS`, `CHOICE`,
 `FLOOR_RESOLVED` (per-player outcome with `PLAYER_JUMPED`, `PLAYER_SAFE` /
-`PLAYER_FIRE`, `PLAYER_ELIMINATED`, `PLAYER_REACHED_BOTTOM`),
+`PLAYER_FIRE`, `PLAYER_REACHED_BOTTOM`),
 `GAME_FINISHED`, `REMATCH_REQUEST`, `BACK_TO_CONFIG` and
 `TIME_REQ` / `TIME_RES`. The 3D scene is never synced; each side animates
 the events itself.
@@ -217,12 +220,18 @@ the events itself.
 - **Secrets:** the guest receives the host's layout, which it is meant to
   see, but not its own. Each of its floors is revealed in
   `FLOOR_RESOLVED` after the jump, and the full layout comes with
-  `GAME_FINISHED`. The guest sends its `CHOICE` only when its timer ends.
+  `GAME_FINISHED`.
+- **Live position:** while the timer runs, each side sends `POS` (its
+  character's x position) whenever it changes, throttled to one message
+  every 80 ms plus a final one. This is a position, not frame-by-frame
+  sync, and it only drives the partner's character on screen. The pick
+  that counts is still the `CHOICE` the guest sends when its timer ends,
+  and the host works out the result.
 - **Timer:** `FLOOR_STARTED` carries the deadline in host time. The guest
   converts it using a clock offset measured with a few `TIME_REQ` /
   `TIME_RES` round trips, so the countdowns end together even when the
   phones' clocks disagree. If the guest's `CHOICE` hasn't arrived 4 s after
-  the deadline, the host uses the column the guest is standing in.
+  the deadline, the host uses the opening nearest the guest's last `POS`.
 - **Duplicates / delays:** every message carries `gameNo` (and `round`).
   Stale or repeated ones are ignored. Scores come from the host's snapshot
   as absolute values, so a repeated message can't award points twice. If

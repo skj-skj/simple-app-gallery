@@ -9,8 +9,9 @@
    * EASY: two safe, one on fire (host picks the difficulty). You
    * can't see which of YOUR openings is safe, but you can see your
    * partner's — so each of you depends on what the other one tells you.
-   * Safe jump +10 and you drop a floor; fire jump −5 and you're out (the
-   * score you have is kept). Highest score when both are done wins.
+   * Every jump drops you one floor: safe +10, fire −5 (your character
+   * gets a little darker with every fire, darkest if every jump was
+   * fire). Both players always play to the ground; highest score wins.
    *
    * ---------------------------------------------------------------------
    * Architecture (same conventions as the other games)
@@ -20,14 +21,16 @@
    *   and resolves the jumps. The guest only applies what it receives.
    * - Send events, not the scene. Nothing about the Three.js scene is sent.
    *   Messages: HELLO, CONFIG, GAME_STARTED, FLOOR_STARTED, CHOICE,
+   *   POS (live character position while choosing, throttled),
    *   FLOOR_RESOLVED (per-player outcomes carrying PLAYER_JUMPED /
-   *   PLAYER_SAFE / PLAYER_FIRE / PLAYER_ELIMINATED / PLAYER_REACHED_BOTTOM),
+   *   PLAYER_SAFE / PLAYER_FIRE / PLAYER_REACHED_BOTTOM),
    *   GAME_FINISHED, REMATCH_REQUEST, BACK_TO_CONFIG, TIME_REQ / TIME_RES.
    * - Keep secrets local. The guest receives the HOST's layout (it is
    *   meant to see it) but NOT its own: each of its own floors is revealed
    *   in FLOOR_RESOLVED after it jumps, and the full layout arrives with
-   *   GAME_FINISHED. The current selection is never sent while the timer
-   *   runs — the guest sends only its final CHOICE when its timer hits 0.
+   *   GAME_FINISHED. Where each character stands IS shared live (POS),
+   *   so you can guide your partner ("go left… more… stop!"); the
+   *   authoritative pick is still the final CHOICE sent at time-out.
    * - Timer. The host sends the floor deadline once (in host clock). The
    *   guest converts it with a clock offset measured by a small
    *   TIME_REQ/TIME_RES exchange, so both countdowns end together. The
@@ -74,6 +77,8 @@
   const RESULT_PAUSE_MS = 2700;  // FLOOR_RESOLVED → next floor / game over
   const CHOICE_WAIT_MS = 4000;   // host waits this long past the deadline for the guest's CHOICE
   const TICK_FROM_S = 10;        // countdown ticks only in the last N seconds
+  const POS_SEND_MS = 80;        // throttle for live position updates
+  const MAX_DARKNESS = 0.85;     // how dark a character gets if EVERY jump was fire
 
   const OPENINGS = ['LEFT', 'CENTER', 'RIGHT'];
 
@@ -201,6 +206,10 @@
       this.lastTickSec = null;
       this.myTargetX = 0;
       this.myFinal = null;
+      this.oppTargetX = null;   // partner's live position (from POS)
+      this._posLastSent = 0;
+      this._posLastX = null;
+      this._posTimer = null;
       this.displayScore = { host: 0, guest: 0 };
       this.view = null;         // what the scene currently shows per role (lags data during animations)
       this.revealed = { host: new Set(), guest: new Set() };
@@ -316,16 +325,17 @@
       this.choiceBtns = Array.from(this.api.root.querySelectorAll('.bf-choice'));
     },
 
-    partnerName() { return this.api.peerNickname || 'Partner'; },
+    // Always "You" / "Partner" (nicknames can be stale or the room name).
+    partnerName() { return 'Partner'; },
 
     applyTheme() {
       this.wrapEl.style.setProperty('--bf-me-color', ROLE_CSS[this.me]);
       this.wrapEl.style.setProperty('--bf-opp-color', ROLE_CSS[this.opp]);
       const pn = this.partnerName();
-      this.hudOppLabel.textContent = pn.length > 10 ? 'Other player' : pn;
+      this.hudOppLabel.textContent = pn;
       this.tagMeEl.textContent = 'YOU · fire hidden ❓';
       this.tagOppEl.textContent = `${pn.toUpperCase()} · fire visible 👁`;
-      this.resultMeName.textContent = (this.api.myNickname || 'You') + ' (you)';
+      this.resultMeName.textContent = 'You';
       this.resultOppName.textContent = pn;
       this.updateMuteBtn();
     },
@@ -389,6 +399,7 @@
         drag.x = e.clientX;
         this.myTargetX = clamp(this.myTargetX + dx * this.worldPerPixel(), X_MIN, X_MAX);
         this.updateChoiceUI();
+        this.sendPos(false);
       });
       const endDrag = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
       on(this.stageEl, 'pointerup', endDrag);
@@ -662,6 +673,8 @@
         if (this.round > 0 && c) this.myTargetX = c.anim ? HOLE_X[c.anim.choice] : c.x;
       }
       if (this.round > 0) this.sound('playFloorTransition');
+      this.oppTargetX = null;
+      this._posLastX = null;
 
       this.setChoiceEnabled(this.canChoose());
       this.updateChoiceUI();
@@ -669,6 +682,7 @@
       this.refreshMarks();
       this.startTick();
       this.later(() => this.checkDeadline(), Math.max(0, deadline - now) + 10);
+      if (this.isActive(this.me)) this.sendPos(true);
     },
 
     startTick() {
@@ -709,6 +723,7 @@
         const choice = nearestOpening(this.myTargetX);
         this.myFinal = choice;
         this.myTargetX = HOLE_X[choice]; // character visibly steps onto the chosen opening
+        this.sendPos(true);
         if (this.api.isHost) this.pendingChoices.host = choice;
         else this.api.send({ type: 'CHOICE', gameNo: this.gameNo, round: this.round, choice });
       }
@@ -738,6 +753,32 @@
       if (!this.canChoose()) return;
       this.myTargetX = HOLE_X[idx];
       this.updateChoiceUI();
+      this.sendPos(false);
+    },
+
+    // Live position so the partner sees where you're standing. Throttled;
+    // the last position is always sent (trailing send).
+    sendPos(force) {
+      if (!this.players || this.round < 0) return;
+      if (!force && !this.canChoose()) return;
+      const x = Math.round(this.myTargetX * 100) / 100;
+      if (!force && x === this._posLastX) return;
+      const wait = POS_SEND_MS - (Date.now() - this._posLastSent);
+      if (!force && wait > 0) {
+        if (!this._posTimer) this._posTimer = this.later(() => { this._posTimer = null; this.sendPos(false); }, wait);
+        return;
+      }
+      this._posLastSent = Date.now();
+      this._posLastX = x;
+      this.api.send({ type: 'POS', gameNo: this.gameNo, round: this.round, x });
+    },
+
+    onPos(msg) {
+      if (msg.gameNo !== this.gameNo || msg.round !== this.round) return;
+      if (this.phase !== 'choosing' && this.phase !== 'locked') return;
+      const x = clamp(Number(msg.x) || 0, X_MIN, X_MAX);
+      this.oppTargetX = x;
+      if (this.api.isHost) this.lastColumn.guest = nearestOpening(x); // fallback if CHOICE is lost
     },
 
     setChoiceEnabled(on) {
@@ -809,8 +850,8 @@
         p.score += delta;
         p.level = fromLevel - 1;
         p.history.push({ level: fromLevel, choice, safe });
-        if (!safe) { p.status = 'burned'; events.push('PLAYER_ELIMINATED'); }
-        else if (p.level === 0) { p.status = 'bottom'; events.push('PLAYER_REACHED_BOTTOM'); }
+        // Fire costs points but never ends your game: you keep falling.
+        if (p.level === 0) { p.status = 'bottom'; events.push('PLAYER_REACHED_BOTTOM'); }
         outcomes[r] = { choice, safeRow, safe, delta, fromLevel, events };
         this.lastColumn[r] = choice;
       });
@@ -870,7 +911,8 @@
             this.later(() => this.sound('playScore'), 220);
             this.showToast('bf-safe', after.status === 'bottom' ? 'GROUND! 🏁' : 'SAFE JUMP!', text, `Score: ${after.score}`, 1500);
           } else {
-            this.showToast('bf-fire', 'FIRE! 🔥', text, `Score: ${after.score}`, 1700);
+            this.showToast('bf-fire', after.status === 'bottom' ? 'FIRE! 🔥 …but GROUND 🏁' : 'FIRE! 🔥', text,
+              `Score: ${after.score}${after.status === 'bottom' ? '' : ' · keep going!'}`, 1700);
           }
         }
         this.updateStatus();
@@ -933,7 +975,10 @@
       const d = DIFFICULTIES[this.config.difficulty] || DIFFICULTIES[DEFAULT_DIFFICULTY];
       this.resultModeEl.textContent = `${d.label} · ${this.config.floors} floors · ${this.config.timer}s per floor`;
 
-      const statusText = (p) => (p.status === 'bottom' ? '🏁 Reached the ground' : `🔥 Burned on floor ${p.level + 1}`);
+      const statusText = (p) => {
+        const fires = p.history.filter((h) => !h.safe).length;
+        return `🏁 Reached the ground · ${fires} fire${fires === 1 ? '' : 's'}`;
+      };
       const hist = (p) => p.history.map((h) => (h.safe ? '✅' : '🔥')).join('');
       this.resultMeScore.textContent = String(me.score);
       this.resultOppScore.textContent = String(opp.score);
@@ -989,8 +1034,7 @@
         // result before the fall animation lands.
         const meP = this.view ? this.view[this.me] : this.players[this.me];
         const oppActive = (this.view ? this.view[this.opp] : this.players[this.opp]).status === 'active';
-        if (meP.status === 'burned') s = oppActive ? `You're out 🔥 — your score counts. Guide ${pn}!` : 'You\'re out 🔥';
-        else if (meP.status === 'bottom') s = oppActive ? `You made it down 🏁 — guide ${pn}!` : 'You made it down 🏁';
+        if (meP.status === 'bottom') s = oppActive ? `You made it down 🏁 — guide ${pn}!` : 'You made it down 🏁';
         else if (this.phase === 'choosing') s = oppActive ? `Pick an opening — ask ${pn} which one is safe` : `${pn} is out — you're on your own… or are you?`;
         else if (this.phase === 'locked') s = 'Time! Jumping…';
         else if (this.phase === 'resolving') s = 'Jump!';
@@ -1045,6 +1089,7 @@
           this.pendingChoices.guest = clamp(msg.choice | 0, 0, 2);
           this.hostTryResolve(false);
           break;
+        case 'POS': this.onPos(msg); break;
         case 'FLOOR_RESOLVED': if (!this.api.isHost) this.applyFloorResolved(msg); break;
         case 'GAME_FINISHED': if (!this.api.isHost) this.applyGameFinished(msg); break;
         case 'REMATCH_REQUEST':
@@ -1457,7 +1502,7 @@
         const layout = this.layouts[role] || [];
         const v = this.view[role];
         const drawn = new Set();
-        const burnedAt = (this.players[role].history || []).find((h) => !h.safe);
+        const fireJumps = (this.players[role].history || []).filter((h) => !h.safe);
 
         // Past floors (revealed at landing) — and everything once finished.
         for (let level = 1; level <= this.config.floors; level++) {
@@ -1466,7 +1511,8 @@
           if (!finished && level === v.level && v.status === 'active') continue;
           drawn.add(level);
           for (let i = 0; i < 3; i++) this.addOpeningMark(role, level, i, isSafe(layout[level], i) ? 'safe' : 'fire', true);
-          if (burnedAt && burnedAt.level === level && this.revealed[role].has(level)) this.addFlames(role, level, burnedAt.choice, 0.75);
+          const fj = fireJumps.find((h) => h.level === level);
+          if (fj && this.revealed[role].has(level)) this.addFlames(role, level, fj.choice, 0.6); // the fire they fell through
         }
 
         // Current floor.
@@ -1554,21 +1600,50 @@
       shadow.position.y = 0.02;
       group.add(shadow);
 
-      return { role, group, legs, arms, mats, geos, shadow, x: 0, y: 0, z: CHAR_Z, anim: null, walk: 0, burned: false, squash: 0 };
+      // Flames that wrap the character for a moment after a fire jump.
+      const s = this.three.shared;
+      const burn = new THREE.Group();
+      [[s.mat.flameOuter, -0.18, 1.0], [s.mat.flameOuter, 0.2, 0.9], [s.mat.flameMid, 0, 0.8], [s.mat.flameCore, 0.05, 0.55]]
+        .forEach(([mat, dx, sc]) => {
+          const m = new THREE.Mesh(s.flameGeo, mat);
+          m.position.set(dx, 0.1, 0.12);
+          m.userData.base = sc;
+          burn.add(m);
+        });
+      burn.visible = false;
+      group.add(burn);
+
+      return { role, group, legs, arms, mats, geos, shadow, burn, burnT: 0, fires: 0, x: 0, y: 0, z: CHAR_Z, anim: null, walk: 0, squash: 0 };
     },
 
     resetCharacter(c, x, level) {
       c.x = x; c.y = this.surfaceY(level); c.z = CHAR_Z;
-      c.anim = null; c.burned = false; c.squash = 0;
+      c.anim = null; c.squash = 0; c.burnT = 0; c.burn.visible = false;
       c.group.rotation.set(0, 0, 0);
-      c.mats.forEach((m) => { if (m.userData.orig != null) m.color.setHex(m.userData.orig); });
       c.shadow.visible = true;
+      this.setCharDarkness(c, 0);
+    },
+
+    // Darkness grows with each fire jump: fires / floors, so a character
+    // that fell into fire on every floor ends up darkest.
+    setCharDarkness(c, fires) {
+      c.fires = fires;
+      const k = this.config.floors > 0 ? MAX_DARKNESS * Math.min(1, fires / this.config.floors) : 0;
+      const { THREE } = this.three;
+      const dark = new THREE.Color(0x140c0a);
+      c.mats.forEach((m) => {
+        if (m.userData.orig == null) return;
+        m.color.setHex(m.userData.orig).lerp(dark, k);
+      });
     },
 
     charTargetX(c) {
       if (c.role === this.me && this.canChoose()) return this.myTargetX;
       if (c.role === this.me && this.phase === 'locked' && this.myFinal !== null) return HOLE_X[this.myFinal];
-      return c.x; // partner stays put — their current choice is never shown
+      if (c.role === this.opp && (this.phase === 'choosing' || this.phase === 'locked') && this.oppTargetX !== null) {
+        return this.oppTargetX; // partner's live position
+      }
+      return c.x;
     },
 
     startCharJump(role, o, onEnterHole, onLand) {
@@ -1608,8 +1683,8 @@
           if (!a.entered && c.y < a.y0 - 0.2) {
             a.entered = true;
             if (!a.safe) {
-              c.burned = true;
-              c.mats.forEach((m) => { if (m.userData.orig != null && m !== c.shadow.material) m.color.setHex(0x3a3030); });
+              c.burnT = 2.6; // on fire for a moment…
+              this.setCharDarkness(c, c.fires + 1); // …and a little darker for good
               t.flames.forEach((f) => {
                 if (f.role === c.role && f.level === a.fromLevel && f.idx === a.choice) f.flare = 1.4;
               });
@@ -1650,13 +1725,19 @@
         const sq = Math.sin(c.squash * Math.PI) * 0.25;
         c.group.scale.set(1 + sq * 0.6, 1 - sq, 1 + sq * 0.6);
       }
-      const bob = !a && !moving && !c.burned ? Math.sin(t.time * 2.2 + (c.role === 'host' ? 0 : 1.7)) * 0.02 : 0;
-      if (c.burned && (!a || a.landed)) {
-        c.group.rotation.z = lerp(c.group.rotation.z, Math.PI / 2 * 0.95, Math.min(1, dt * 8));
-        c.group.position.set(this.roleX(c.role) + c.x + 0.7, c.y + 0.26, c.z + 0.3);
-      } else {
-        c.group.rotation.z = 0;
-        c.group.position.set(this.roleX(c.role) + c.x, c.y + bob, c.z);
+      const bob = !a && !moving ? Math.sin(t.time * 2.2 + (c.role === 'host' ? 0 : 1.7)) * 0.02 : 0;
+      c.group.position.set(this.roleX(c.role) + c.x, c.y + bob, c.z);
+
+      // Burning: flames flicker around the body, then die down.
+      if (c.burnT > 0) {
+        c.burnT = Math.max(0, c.burnT - dt);
+        const life = Math.min(1, c.burnT / 0.6);
+        c.burn.visible = c.burnT > 0;
+        c.burn.children.forEach((m, i) => {
+          const b = m.userData.base * life;
+          m.scale.set(b, b * 1.6 * (1 + 0.3 * Math.sin(t.time * 13 + i * 2.1)), b);
+        });
+        if (!a && !moving) c.group.position.x += Math.sin(t.time * 40) * 0.02 * life; // shiver
       }
       c.group.rotation.y = moving && !a ? Math.sign(this.charTargetX(c) - c.x) * 0.5 : lerp(c.group.rotation.y, 0, Math.min(1, dt * 8));
     },
@@ -1675,10 +1756,7 @@
           c.y = this.surfaceY(this.view[r].level);
           const last = this.players && this.players[r].history.slice(-1)[0];
           if (last) c.x = HOLE_X[last.choice];
-          if (this.view[r].status === 'burned') {
-            c.burned = true;
-            c.mats.forEach((m) => { if (m.userData.orig != null && m !== c.shadow.material) m.color.setHex(0x3a3030); });
-          }
+          this.setCharDarkness(c, this.players ? this.players[r].history.filter((h) => !h.safe).length : 0);
         });
         if (this.isActive(this.me)) this.myTargetX = t.chars[this.me].x;
       }
@@ -1732,7 +1810,7 @@
       const t = this.three;
       const target = this.focusY();
       if (t.camY === null) t.camY = target;
-      t.camY = lerp(t.camY, target, 1 - Math.exp(-dt * 3.2));
+      t.camY = lerp(t.camY, target, 1 - Math.exp(-dt * 4.5));
       const d = t.camDist;
       t.camera.position.set(0, t.camY + d * Math.sin(CAM_PITCH) + 0.4, d * Math.cos(CAM_PITCH));
       t.camera.lookAt(0, t.camY + 0.5, 0); // keeps the current floor below the HUD
@@ -1831,7 +1909,7 @@
       const p = this.toScreen(role, 2.1);
       if (!k || !p) return;
       const col = safe ? [47, 191, 113] : [255, 90, 42];
-      const make = (dx, dy, color) => {
+      const make = (dx, dy, color, alpha) => {
         const o = k.add([
           k.text(text, { size: 30 }),
           k.pos(p.x + dx, p.y + dy),
@@ -1844,12 +1922,12 @@
         o.onUpdate(() => {
           life -= k.dt();
           o.pos.y -= 55 * k.dt();
-          o.opacity = Math.max(0, Math.min(1, life * 2));
+          o.opacity = alpha * Math.max(0, Math.min(1, life * 2));
           if (life <= 0) o.destroy();
         });
       };
-      make(2, 2, [30, 30, 40]);
-      make(0, 0, col);
+      make(1.5, 1.5, [30, 30, 40], 0.3); // faint drop shadow
+      make(0, 0, col, 1);
     },
 
     fxSparks(role, safe) {
