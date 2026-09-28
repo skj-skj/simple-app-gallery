@@ -15,7 +15,7 @@ step, just the two browsers talking to each other.
 | 🚢 Battleship | Turn-based | Classic 10×10 grid and 5-ship fleet; turns alternate every shot (no extra shot on a hit). |
 | 🔲 Dots and Boxes | Turn-based | Host picks the board size (3×3 to 10×10); completing a box gives you another turn. |
 | 🔦 Laser Link | Co-op puzzle | Each player controls half the mirrors on a shared grid and only sees their own, so you have to talk it through to guide the beam to the target. |
-| 🏢 Building Fall | Simultaneous, timed | 3D trust-or-betray game. Each floor has 3 openings; you can't see which of yours are on fire, but you can see your partner's. Host picks floors (3–20), timer (30/60/90 s) and difficulty (Easy: 2 safe + 1 fire, Hard: 1 safe + 2 fire). Every jump drops a floor: safe +10, fire −5 (your character darkens a little per fire). Both play to the ground; highest score wins. |
+| 🏢 Building Fall | Simultaneous, timed | 3D trust-or-betray game. Each floor has 3 openings; you can't see which of yours are on fire, but you can see your partner's. Either player sets floors (3–20), timer (30/60/90 s) and difficulty (Easy: 2 safe + 1 fire, Hard: 1 safe + 2 fire). Every jump drops a floor: safe +10, fire −5 (your character darkens a little per fire). Both play to the ground; highest score wins. |
 
 ## How it works
 
@@ -188,11 +188,17 @@ can't see which of *your* openings are on fire, but you can see your
 partner's, so the only way to know is to ask. Your partner can tell you
 the truth or lie.
 
-- **Settings (host only):** floors (3–20, default 10), floor timer
+- **Settings (either player):** floors (3–20, default 10), floor timer
   (`TIMER_OPTIONS = [30, 60, 90]`) and difficulty (`DIFFICULTIES`:
   **Easy** has 2 safe openings and 1 fire per floor, **Hard** has 1 safe
-  and 2 fire). The guest sees the settings update live. **Start** only
-  unlocks once the guest has opened the game and loaded the 3D engine.
+  and 2 fire). Both players can change them at the same time and each
+  change shows up on both screens. Every `CONFIG` carries a revision
+  number: the newer change wins, and if both change something at the same
+  instant the host's change wins, so the screens can never disagree.
+  Either player can press **Start**; it unlocks once both have opened the
+  game and loaded the 3D engine. When the guest presses it, it sends
+  `START_REQUEST` and the host starts the game (only if both have the
+  same settings revision).
 - **Choosing:** tap LEFT / CENTER / RIGHT as often as you like, or drag
   on the scene to move between openings. Your character moves on **both**
   screens as you do, so your partner can guide you ("left… a bit more…
@@ -206,11 +212,11 @@ the truth or lie.
   score wins, with a draw on equal scores.
 - **Names:** the game always says "You" and "Partner", on both screens.
 - **Rematch:** *Play Again* (either player) keeps the settings and rolls
-  new buildings. *Configuration* (host) goes back to the settings.
+  new buildings. *Configuration* (either player) takes both back to the settings.
 
-**Sync.** The host is authoritative. It rolls both layouts, starts each
+**Sync.** Once a game starts, the host is authoritative. It rolls both layouts, starts each
 floor, collects the two final choices and resolves them. Messages:
-`HELLO`, `CONFIG`, `GAME_STARTED`, `FLOOR_STARTED`, `POS`, `CHOICE`,
+`HELLO`, `CONFIG`, `START_REQUEST`, `GAME_STARTED`, `FLOOR_STARTED`, `POS`, `CHOICE`,
 `FLOOR_RESOLVED` (per-player outcome with `PLAYER_JUMPED`, `PLAYER_SAFE` /
 `PLAYER_FIRE`, `PLAYER_REACHED_BOTTOM`),
 `GAME_FINISHED`, `REMATCH_REQUEST`, `BACK_TO_CONFIG` and
@@ -284,3 +290,4 @@ people who trust each other.
   someone who deliberately waits could see your move first (see the
   comment in `games/rps.js` for how to harden it). Battleship trusts each
   player to report hits on their own board honestly.
+  

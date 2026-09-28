@@ -16,8 +16,11 @@
    * ---------------------------------------------------------------------
    * Architecture (same conventions as the other games)
    * ---------------------------------------------------------------------
-   * - Host-authoritative. Only the host shows the config controls, rolls
-   *   the building layouts, starts each floor, collects both final choices
+   * - Shared settings. Either player can change the settings and press
+   *   Start. Every CONFIG carries a revision number; the higher revision
+   *   wins, and on a tie (both changed at the same instant) the host's
+   *   wins, so both screens always settle on the same settings.
+   * - Host-authoritative game. The host rolls the building layouts, starts each floor, collects both final choices
    *   and resolves the jumps. The guest only applies what it receives.
    * - Send events, not the scene. Nothing about the Three.js scene is sent.
    *   Messages: HELLO, CONFIG, GAME_STARTED, FLOOR_STARTED, CHOICE,
@@ -186,6 +189,7 @@
 
       this.phase = 'config';   // config | intro | choosing | locked | resolving | finished
       this.config = { floors: FLOORS_DEFAULT, timer: DEFAULT_TIMER, difficulty: DEFAULT_DIFFICULTY };
+      this.configRev = 0;       // bumped on every local settings change
       this.gameNo = 0;
       this.round = -1;
       this.lastResolvedRound = -1;
@@ -355,9 +359,9 @@
 
       on(this.floorsMinusBtn, 'click', () => { this.unlockSound(); this.changeFloors(-1); });
       on(this.floorsPlusBtn, 'click', () => { this.unlockSound(); this.changeFloors(1); });
-      on(this.startBtn, 'click', () => { this.unlockSound(); this.hostStartGame(); });
+      on(this.startBtn, 'click', () => { this.unlockSound(); this.onStartPressed(); });
       on(this.againBtn, 'click', () => { this.unlockSound(); this.onPlayAgain(); });
-      on(this.configBtn, 'click', () => { this.unlockSound(); this.hostBackToConfig(); });
+      on(this.configBtn, 'click', () => { this.unlockSound(); this.backToConfig(); });
       on(this.muteBtn, 'click', () => {
         const S = window.BuildingFallSounds;
         if (!S) return;
@@ -453,13 +457,11 @@
         b.type = 'button';
         b.className = 'bf-opt bf-opt-wide' + (key === this.config.difficulty ? ' bf-on' : '');
         b.innerHTML = `${d.label}<small>${d.rule}</small>`;
-        b.disabled = !this.api.isHost;
         b.addEventListener('click', () => {
-          if (!this.api.isHost || this.phase !== 'config') return;
+          if (this.phase !== 'config') return;
           this.unlockSound();
           this.config.difficulty = key;
-          this.renderConfig();
-          this.sendConfig();
+          this.localConfigChanged();
         });
         this.diffOptsEl.appendChild(b);
       });
@@ -473,62 +475,84 @@
         b.type = 'button';
         b.className = 'bf-opt' + (sec === this.config.timer ? ' bf-on' : '');
         b.textContent = `${sec}s`;
-        b.disabled = !this.api.isHost;
         b.addEventListener('click', () => {
-          if (!this.api.isHost || this.phase !== 'config') return;
+          if (this.phase !== 'config') return;
           this.unlockSound();
           this.config.timer = sec;
-          this.renderTimerOptions();
-          this.sendConfig();
+          this.localConfigChanged();
         });
         this.timerOptsEl.appendChild(b);
       });
     },
 
     changeFloors(delta) {
-      if (!this.api.isHost || this.phase !== 'config') return;
+      if (this.phase !== 'config') return;
       this.config.floors = clamp(this.config.floors + delta, FLOORS_MIN, FLOORS_MAX);
+      this.localConfigChanged();
+    },
+
+    localConfigChanged() {
+      this.configRev++;
       this.renderConfig();
       this.sendConfig();
       this.schedulePreview();
     },
 
     sendConfig() {
-      if (this.api.isHost) this.api.send({ type: 'CONFIG', config: this.config });
+      this.api.send({ type: 'CONFIG', config: this.config, rev: this.configRev, by: this.me });
+    },
+
+    // Higher revision wins; on a tie the host's settings win.
+    onConfig(msg) {
+      if (!msg.config) return;
+      const rev = Number(msg.rev) || 0;
+      if (rev < this.configRev) return;
+      if (rev === this.configRev && msg.by !== 'host') {
+        if (this.api.isHost) this.sendConfig(); // tie: re-assert the host's settings
+        return;
+      }
+      this.configRev = rev;
+      this.config = {
+        floors: clamp(msg.config.floors | 0, FLOORS_MIN, FLOORS_MAX),
+        timer: TIMER_OPTIONS.indexOf(msg.config.timer) >= 0 ? msg.config.timer : DEFAULT_TIMER,
+        difficulty: DIFFICULTIES[msg.config.difficulty] ? msg.config.difficulty : DEFAULT_DIFFICULTY,
+      };
+      if (this.phase === 'config') { this.renderConfig(); this.schedulePreview(); }
     },
 
     renderConfig() {
-      const host = this.api.isHost;
       this.floorsValEl.textContent = String(this.config.floors);
-      this.floorsMinusBtn.disabled = !host || this.config.floors <= FLOORS_MIN;
-      this.floorsPlusBtn.disabled = !host || this.config.floors >= FLOORS_MAX;
+      this.floorsMinusBtn.disabled = this.config.floors <= FLOORS_MIN;
+      this.floorsPlusBtn.disabled = this.config.floors >= FLOORS_MAX;
       this.renderTimerOptions();
       this.renderDifficultyOptions();
 
-      if (host) {
-        this.configSubEl.textContent = 'You pick the settings';
-        this.startBtn.classList.remove('bf-hidden');
-        const ready = this.peerReady && this.libsReady;
-        this.startBtn.disabled = !ready;
-        let note = '';
-        if (!this.libsReady) note = 'Loading 3D…';
-        else if (!this.peerPresent) note = `Waiting for ${this.partnerName()} to open Building Fall…`;
-        else if (!this.peerReady) note = `${this.partnerName()} is still loading…`;
-        else note = `${this.partnerName()} is ready.`;
-        this.configNoteEl.textContent = note;
-        this.configSpinnerEl.classList.toggle('bf-hidden', ready);
-      } else {
-        this.configSubEl.textContent = `${this.partnerName()} picks the settings`;
-        this.startBtn.classList.add('bf-hidden');
-        this.configNoteEl.textContent = this.peerPresent
-          ? `Waiting for ${this.partnerName()} to start…`
-          : `Waiting for ${this.partnerName()}…`;
-        this.configSpinnerEl.classList.remove('bf-hidden');
-      }
+      this.configSubEl.textContent = 'Either of you can change these';
+      const ready = this.peerReady && this.libsReady;
+      this.startBtn.disabled = !ready || this._startRequested;
+      let note = '';
+      if (!this.libsReady) note = 'Loading 3D…';
+      else if (!this.peerPresent) note = `Waiting for ${this.partnerName()} to open Building Fall…`;
+      else if (!this.peerReady) note = `${this.partnerName()} is still loading…`;
+      else if (this._startRequested) note = 'Starting…';
+      else note = `${this.partnerName()} is here · changes show on both screens`;
+      this.configNoteEl.textContent = note;
+      this.configSpinnerEl.classList.toggle('bf-hidden', ready && !this._startRequested);
+    },
+
+    // Start button (either player). The host still generates the game.
+    onStartPressed() {
+      if (this.phase !== 'config' || !this.peerReady || !this.libsReady) return;
+      if (this.api.isHost) { this.hostStartGame(); return; }
+      this._startRequested = true;
+      this.renderConfig();
+      this.api.send({ type: 'START_REQUEST', rev: this.configRev });
+      this.later(() => { if (this.phase === 'config') { this._startRequested = false; this.renderConfig(); } }, 4000);
     },
 
     goToConfig() {
       this.phase = 'config';
+      this._startRequested = false;
       this.clearHostTimers();
       this.stopTick();
       this.round = -1;
@@ -547,8 +571,8 @@
       this.schedulePreview();
     },
 
-    hostBackToConfig() {
-      if (!this.api.isHost) return;
+    // "Configuration" on the result screen — either player.
+    backToConfig() {
       this.api.send({ type: 'BACK_TO_CONFIG', gameNo: this.gameNo });
       this.goToConfig();
       this.sendConfig();
@@ -992,8 +1016,8 @@
       this.resultOppBox.classList.toggle('bf-winner', winner === this.opp);
 
       this.againBtn.disabled = false;
-      this.configBtn.classList.toggle('bf-hidden', !this.api.isHost);
-      this.resultNoteEl.textContent = this.api.isHost ? '' : `${this.partnerName()} can change the settings.`;
+      this.configBtn.classList.remove('bf-hidden');
+      this.resultNoteEl.textContent = '';
       this.resultEl.classList.remove('bf-hidden');
     },
 
@@ -1026,7 +1050,7 @@
     updateStatus() {
       const pn = this.partnerName();
       let s = ' ';
-      if (this.phase === 'config') s = this.api.isHost ? 'Choose the settings, then start' : `Waiting for ${pn} to start…`;
+      if (this.phase === 'config') s = 'Choose the settings together, then start';
       else if (this.phase === 'intro') s = 'Get ready…';
       else if (this.phase === 'finished') s = 'Game over';
       else if (this.players) {
@@ -1071,14 +1095,13 @@
       if (!msg || typeof msg !== 'object') return;
       switch (msg.type) {
         case 'HELLO': this.onHello(msg); break;
-        case 'CONFIG':
-          if (this.api.isHost || !msg.config) break;
-          this.config = {
-            floors: clamp(msg.config.floors | 0, FLOORS_MIN, FLOORS_MAX),
-            timer: msg.config.timer,
-            difficulty: DIFFICULTIES[msg.config.difficulty] ? msg.config.difficulty : DEFAULT_DIFFICULTY,
-          };
-          if (this.phase === 'config') { this.renderConfig(); this.schedulePreview(); }
+        case 'CONFIG': this.onConfig(msg); break;
+        case 'START_REQUEST':
+          // Guest pressed Start. Only start once both sides have the same
+          // settings revision; otherwise re-send ours so they converge.
+          if (!this.api.isHost || this.phase !== 'config') break;
+          if ((Number(msg.rev) || 0) === this.configRev) this.hostStartGame();
+          else this.sendConfig();
           break;
         case 'GAME_STARTED': if (!this.api.isHost) this.applyGameStarted(msg); break;
         case 'FLOOR_STARTED': if (!this.api.isHost) this.applyFloorStarted(msg); break;
@@ -1096,7 +1119,7 @@
           if (this.api.isHost && this.phase === 'finished' && msg.gameNo === this.gameNo) this.hostStartGame();
           break;
         case 'BACK_TO_CONFIG':
-          if (!this.api.isHost && msg.gameNo >= this.gameNo) this.goToConfig();
+          if (msg.gameNo >= this.gameNo && this.phase !== 'config') this.goToConfig();
           break;
         case 'TIME_REQ':
           if (this.api.isHost) this.api.send({ type: 'TIME_RES', t0: msg.t0, th: Date.now() });
@@ -1110,8 +1133,8 @@
       this.peerReady = !!msg.ready;
       if (msg.fresh && this.phase !== 'config') this.goToConfig(); // partner re-opened the game
       if (msg.wantAck) this.api.send({ type: 'HELLO', ready: this.libsReady, fresh: false, wantAck: false });
-      if (this.api.isHost) this.sendConfig();
-      else if (!this.clock.synced) this.syncClock();
+      this.sendConfig(); // both sides share settings; the newer revision wins
+      if (!this.api.isHost && !this.clock.synced) this.syncClock();
       this.applyTheme();
       if (this.phase === 'config') this.renderConfig();
     },
@@ -1557,10 +1580,12 @@
       body.position.y = 0.95;
       const head = new THREE.Mesh(G(new THREE.SphereGeometry(0.24, 16, 12)), headMat);
       head.position.y = 1.52;
-      const eyeGeo = G(new THREE.SphereGeometry(0.035, 8, 6));
-      [-0.08, 0.08].forEach((ex) => {
+      // Eyes sit a little below the middle of the face so a cap brim
+      // can't hide them from the camera, which looks down from above.
+      const eyeGeo = G(new THREE.SphereGeometry(0.042, 10, 8));
+      [-0.085, 0.085].forEach((ex) => {
         const e = new THREE.Mesh(eyeGeo, eyeMat);
-        e.position.set(ex, 1.55, 0.215);
+        e.position.set(ex, 1.47, 0.215);
         group.add(e);
       });
       group.add(body, head);
@@ -1580,9 +1605,9 @@
       // Distinguishing accessory (not gendered): cap vs. scarf.
       if (role === 'host') {
         const cap = new THREE.Mesh(G(new THREE.SphereGeometry(0.255, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)), accMat);
-        cap.position.y = 1.56;
-        const brim = new THREE.Mesh(G(new THREE.CylinderGeometry(0.2, 0.2, 0.04, 16, 1, false, -Math.PI / 2, Math.PI)), accMat);
-        brim.position.set(0, 1.58, 0.12);
+        cap.position.y = 1.6;
+        const brim = new THREE.Mesh(G(new THREE.CylinderGeometry(0.15, 0.15, 0.035, 16, 1, false, -Math.PI / 2, Math.PI)), accMat);
+        brim.position.set(0, 1.61, 0.13);
         group.add(cap, brim);
       } else {
         const scarf = new THREE.Mesh(G(new THREE.TorusGeometry(0.2, 0.07, 8, 18)), accMat);
