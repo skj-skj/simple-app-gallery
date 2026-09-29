@@ -1,0 +1,500 @@
+<style>
+    .bw-wrap {
+        margin: -24px -16px;
+        padding: 14px 10px 18px;
+        max-width: 520px;
+        margin-left: auto;
+        margin-right: auto;
+        text-align: center;
+        --bw-me: #667eea;
+        --bw-opp: #e0724a;
+        --bw-hit: #2fa36b;
+        --bw-miss: #d9534f;
+        --bw-ink: #2d2d2d;
+        --bw-soft: #f4f2fb;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    .bw-wrap * {
+        box-sizing: border-box;
+    }
+    .bw-hidden {
+        display: none !important;
+    }
+
+    .bw-status {
+        font-size: 1.02rem;
+        font-weight: 700;
+        min-height: 1.3em;
+        color: var(--bw-ink);
+    }
+    .bw-substatus {
+        font-size: 0.82rem;
+        color: #777;
+        margin: 2px 0 10px;
+        min-height: 1.2em;
+    }
+
+    .bw-score {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        font-size: 0.88rem;
+        font-weight: 700;
+        margin-bottom: 12px;
+    }
+    .bw-score .bw-me {
+        color: var(--bw-me);
+    }
+    .bw-score .bw-opp {
+        color: var(--bw-opp);
+    }
+    .bw-score .bw-round {
+        color: #777;
+    }
+
+    /* ---------- Setup ---------- */
+    .bw-setup-title {
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+    .bw-opt-row {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        margin-bottom: 16px;
+    }
+    .bw-opt {
+        flex: 1;
+        max-width: 90px;
+        background: #fff;
+        border: 2px solid #d7dbe6;
+        color: #444;
+        border-radius: 10px;
+        padding: 10px 4px;
+        font-size: 0.95rem;
+        font-weight: 800;
+    }
+    .bw-opt:hover {
+        background: #fff;
+        border-color: var(--bw-me);
+    }
+    .bw-opt.bw-on {
+        border-color: var(--bw-me);
+        background: #eef0fd;
+        color: var(--bw-me);
+    }
+    .bw-rules {
+        font-size: 0.8rem;
+        color: #777;
+        margin: 0 auto 14px;
+        max-width: 340px;
+        line-height: 1.4;
+    }
+    .bw-main-btn {
+        max-width: 240px;
+        margin: 0 auto;
+        display: block;
+    }
+    .bw-alt-btn {
+        max-width: 240px;
+        margin: 8px auto 0;
+        display: block;
+        background: #eef1f6;
+        color: #555;
+    }
+    .bw-alt-btn:hover {
+        background: #e2e6ee;
+    }
+    .bw-waiting-note {
+        color: #888;
+        font-size: 0.85rem;
+        margin-top: 10px;
+    }
+    .bw-spinner-sm {
+        width: 20px;
+        height: 20px;
+        margin: 10px auto 0;
+        border: 3px solid #e0e5ee;
+        border-top-color: var(--bw-me);
+        border-radius: 50%;
+        animation: bw-spin 0.8s linear infinite;
+    }
+    @keyframes bw-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* ---------- BOLLYWOOD strip ---------- */
+    .bw-strip {
+        display: flex;
+        justify-content: center;
+        gap: 4px;
+        margin: 4px 0 18px;
+    }
+    .bw-life {
+        position: relative;
+        width: clamp(26px, 8.4vw, 40px);
+        height: clamp(34px, 10.5vw, 48px);
+        border-radius: 8px;
+        background: var(--bw-soft);
+        border: 2px solid #e2dcf5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: clamp(1rem, 4.6vw, 1.45rem);
+        font-weight: 900;
+        color: #4b3f78;
+        transition:
+            background 0.2s,
+            color 0.2s,
+            border-color 0.2s;
+    }
+    .bw-life.bw-crossed {
+        background: #fdeceb;
+        border-color: #f3c5c3;
+        color: #b9a7a7;
+    }
+    .bw-life .bw-slash {
+        position: absolute;
+        left: 50%;
+        top: 8%;
+        width: 3px;
+        height: 84%;
+        background: var(--bw-miss);
+        border-radius: 2px;
+        transform: translateX(-50%) rotate(28deg);
+        transform-origin: 50% 100%;
+        animation: bw-slash-draw 0.25s ease-out;
+    }
+    @keyframes bw-slash-draw {
+        from {
+            clip-path: inset(100% 0 0 0);
+        }
+        to {
+            clip-path: inset(0 0 0 0);
+        }
+    }
+    .bw-life .bw-by {
+        position: absolute;
+        bottom: -15px;
+        left: 0;
+        right: 0;
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: var(--bw-miss);
+    }
+
+    /* ---------- Title (dashes) ---------- */
+    .bw-title {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        column-gap: 16px;
+        row-gap: 10px;
+        margin: 6px 0 16px;
+        min-height: 44px;
+    }
+    .bw-word {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px;
+    }
+    .bw-slot {
+        width: clamp(20px, 6.4vw, 30px);
+        height: clamp(30px, 8.6vw, 38px);
+        border-bottom: 3px solid #4b3f78;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        font-size: clamp(1rem, 4.8vw, 1.4rem);
+        font-weight: 900;
+        color: var(--bw-ink);
+        padding-bottom: 2px;
+    }
+    .bw-slot.bw-open {
+        animation: bw-pop 0.3s ease-out;
+    }
+    .bw-slot.bw-ghost {
+        color: #c5c0d6;
+    } /* setter view: not yet guessed */
+    .bw-slot.bw-missed {
+        color: var(--bw-miss);
+    } /* shown after the guesser lost */
+    @keyframes bw-pop {
+        0% {
+            transform: scale(0.4);
+            opacity: 0.3;
+        }
+        70% {
+            transform: scale(1.2);
+        }
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    /* ---------- Typing box (setter) ---------- */
+    .bw-typed {
+        min-height: 52px;
+        margin: 0 auto 6px;
+        max-width: 460px;
+        border: 2px solid #d7dbe6;
+        border-radius: 12px;
+        background: #fff;
+        padding: 10px 12px;
+        font-size: 1.25rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        color: var(--bw-ink);
+        word-break: break-all;
+        white-space: pre-wrap;
+        text-align: left;
+    }
+    .bw-typed .bw-placeholder {
+        color: #aaa;
+        font-weight: 600;
+        letter-spacing: 0;
+        font-size: 0.95rem;
+    }
+    .bw-caret {
+        display: inline-block;
+        width: 2px;
+        height: 1.1em;
+        margin-left: 1px;
+        vertical-align: -0.15em;
+        background: var(--bw-me);
+        animation: bw-blink 1s steps(1) infinite;
+    }
+    @keyframes bw-blink {
+        50% {
+            opacity: 0;
+        }
+    }
+    .bw-typed-meta {
+        font-size: 0.75rem;
+        color: #888;
+        margin-bottom: 12px;
+        min-height: 1.1em;
+    }
+    .bw-typed-meta.bw-warn {
+        color: var(--bw-miss);
+    }
+
+    /* ---------- On-screen keyboard ---------- */
+    .bw-kb {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 4px;
+        touch-action: manipulation;
+    }
+    .bw-kb-row {
+        display: flex;
+        justify-content: center;
+        gap: 4px;
+    }
+    .bw-key {
+        flex: 1;
+        max-width: 42px;
+        min-width: 0;
+        width: auto;
+        height: 46px;
+        padding: 0;
+        border-radius: 7px;
+        background: #e6e8f0;
+        color: #333;
+        font-size: 1.02rem;
+        font-weight: 800;
+        transition:
+            background 0.15s,
+            color 0.15s,
+            transform 0.08s;
+    }
+    .bw-key:hover {
+        background: #d9dcea;
+        transform: none;
+    }
+    .bw-key:active {
+        transform: scale(0.92);
+    }
+    .bw-key.bw-key-wide {
+        max-width: 72px;
+        flex: 1.6;
+        font-size: 0.8rem;
+    }
+    .bw-key.bw-key-space {
+        max-width: 180px;
+        flex: 4;
+        font-size: 0.8rem;
+    }
+    .bw-key.bw-key-done {
+        background: var(--bw-me);
+        color: #fff;
+    }
+    .bw-key.bw-key-done:hover {
+        background: #5568d3;
+    }
+    .bw-key.bw-key-hit,
+    .bw-key.bw-key-hit:disabled {
+        background: var(--bw-hit);
+        color: #fff;
+    }
+    .bw-key.bw-key-miss,
+    .bw-key.bw-key-miss:disabled {
+        background: #b8bbc4;
+        color: #eceef2;
+        text-decoration: line-through;
+    }
+    .bw-key.bw-key-pending:disabled {
+        background: #cfd3e6;
+        color: #888;
+    }
+    .bw-key:disabled {
+        background: #eef0f4;
+        color: #aaa;
+        transform: none;
+        cursor: default;
+    }
+    .bw-key.bw-key-done:disabled {
+        background: #ccc;
+        color: #fff;
+    }
+
+    /* ---------- Round end / session end ---------- */
+    .bw-panel {
+        margin-top: 12px;
+        padding: 14px;
+        border-radius: 12px;
+        background: var(--bw-soft);
+    }
+    .bw-panel h3 {
+        color: #4b3f78;
+        margin-bottom: 4px;
+        font-size: 1.15rem;
+    }
+    .bw-panel p {
+        font-size: 0.9rem;
+        color: #555;
+        margin-bottom: 4px;
+    }
+    .bw-panel .bw-reveal {
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        color: var(--bw-ink);
+        font-size: 1.05rem;
+    }
+    .bw-panel button {
+        margin-top: 10px;
+    }
+    .bw-history {
+        list-style: none;
+        margin: 10px auto 0;
+        max-width: 360px;
+        text-align: left;
+        font-size: 0.82rem;
+    }
+    .bw-history li {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 4px 0;
+        border-bottom: 1px solid #e6e1f5;
+    }
+    .bw-history li span:first-child {
+        color: #555;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .bw-history .bw-w-me {
+        color: var(--bw-me);
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .bw-history .bw-w-opp {
+        color: var(--bw-opp);
+        font-weight: 800;
+        white-space: nowrap;
+    }
+</style>
+
+<div class="bw-wrap">
+    <div class="bw-status" id="bw-status">Loading…</div>
+    <div class="bw-substatus" id="bw-substatus">&nbsp;</div>
+
+    <!-- ============= SETUP (host picks rounds) ============= -->
+    <div id="bw-setup">
+        <div class="bw-setup-title">Rounds in this session</div>
+        <div class="bw-opt-row" id="bw-rounds-opts"></div>
+        <p class="bw-rules">
+            Take turns: one of you types a movie or series name (any language),
+            the other guesses it one letter at a time. Every wrong letter
+            crosses out one letter of BOLLYWOOD. Guess it before all 9 are
+            crossed to win the round.
+        </p>
+        <button id="bw-start-btn" class="bw-main-btn">Start</button>
+    </div>
+    <div id="bw-setup-waiting" class="bw-waiting-note bw-hidden">
+        <p>
+            <span id="bw-setup-waiting-name">Partner</span> is choosing the
+            number of rounds…
+        </p>
+        <div class="bw-spinner-sm"></div>
+    </div>
+
+    <!-- ============= PLAY ============= -->
+    <div id="bw-play" class="bw-hidden">
+        <div class="bw-score">
+            <span class="bw-round" id="bw-round-label">Round 1 / 5</span>
+            <span class="bw-me">You: <span id="bw-score-me">0</span></span>
+            <span class="bw-opp"
+                >Partner: <span id="bw-score-opp">0</span></span
+            >
+        </div>
+
+        <!-- Setter types the title -->
+        <div id="bw-typing" class="bw-hidden">
+            <div class="bw-typed" id="bw-typed"></div>
+            <div class="bw-typed-meta" id="bw-typed-meta">&nbsp;</div>
+        </div>
+
+        <!-- Guessing board (both see it) -->
+        <div id="bw-board" class="bw-hidden">
+            <div class="bw-strip" id="bw-strip"></div>
+            <div class="bw-title" id="bw-title"></div>
+        </div>
+
+        <!-- Guesser waits while the setter types -->
+        <div id="bw-wait-title" class="bw-waiting-note bw-hidden">
+            <p>
+                <span id="bw-wait-title-name">Partner</span> is typing a movie
+                or series name…
+            </p>
+            <div class="bw-spinner-sm"></div>
+        </div>
+
+        <div class="bw-kb" id="bw-kb"></div>
+
+        <div id="bw-round-end" class="bw-panel bw-hidden">
+            <h3 id="bw-round-end-title"></h3>
+            <p>
+                It was: <span class="bw-reveal" id="bw-round-end-reveal"></span>
+            </p>
+            <button id="bw-next-btn" class="bw-main-btn">Next round</button>
+        </div>
+    </div>
+
+    <!-- ============= SESSION OVER ============= -->
+    <div id="bw-gameover" class="bw-panel bw-hidden">
+        <h3 id="bw-gameover-title"></h3>
+        <p id="bw-gameover-sub"></p>
+        <ul class="bw-history" id="bw-history"></ul>
+        <button id="bw-again-btn" class="bw-main-btn">Play Again</button>
+        <button id="bw-settings-btn" class="bw-alt-btn">Change rounds</button>
+    </div>
+</div>

@@ -16,6 +16,7 @@ step, just the two browsers talking to each other.
 | 🔲 Dots and Boxes | Turn-based | Host picks the board size (3×3 to 10×10); completing a box gives you another turn. |
 | 🔦 Laser Link | Co-op puzzle | Each player controls half the mirrors on a shared grid and only sees their own, so you have to talk it through to guide the beam to the target. |
 | 🏢 Building Fall | Simultaneous, timed | 3D trust-or-betray game. Each floor has 3 openings; you can't see which of yours are on fire, but you can see your partner's. Either player sets floors (3–20), timer (10/30/60/90 s) and difficulty (Easy: 2 safe + 1 fire, Hard: 1 safe + 2 fire). Every jump drops a floor: safe +10, fire −5 (your character darkens a little per fire). Both play to the ground; highest score wins. |
+| 🎬 Bollywood | Take turns, guess the title | Hangman meets Wordle. One player types a movie or series name, the other guesses letters on an on-screen keyboard. Each miss crosses out one letter of BOLLYWOOD (9 lives). Host picks 5, 10 or 15 rounds. |
 
 ## How it works
 
@@ -64,6 +65,7 @@ games/battleship.html / .js          Battleship
 games/dots_and_boxes.html / .js      Dots and Boxes
 games/lazer_link.html / .js          Laser Link (puzzle gen, laser sim, rendering)
 games/building_fall.html / .js       Building Fall (3D scene, floor timer, jump resolution)
+games/bollywood.html / .js           Bollywood (title typing, letter guessing, BOLLYWOOD lives)
 games/assets/scribble-word-list.json Scribble 2's categorised word list
 games/assets/battleship_sounds.js    Battleship's Web Audio sound effects
 games/assets/lazer_link_sounds.js    Laser Link's Web Audio sound effects
@@ -256,6 +258,37 @@ with Web Audio, with no audio files. The sounds are short and quiet
 because players are usually on a voice call. The context is unlocked on
 the first tap and suspended after a few idle seconds or when the tab is
 hidden. There's a 🔊/🔇 toggle in the HUD, saved in `localStorage`.
+
+### Bollywood
+
+Each round, one player is the **setter** and the other the **guesser**.
+Who sets is worked out from `(round + session) % 2`, so setters alternate
+every round and the first setter alternates every session.
+
+- **Setup (host):** rounds per session (`ROUND_OPTIONS = [5, 10, 15]`,
+  default 5). The guest's *Play Again* asks the host to start a new
+  session. *Change rounds* (either player) takes both back to setup.
+- **Typing:** the setter types the title on the on-screen keyboard (A–Z,
+  0–9, space; up to 40 characters). Neither player needs the phone's
+  keyboard. Extra spaces are collapsed when it is submitted.
+- **Guessing:** the guesser sees one dash per character, grouped by word,
+  under the letters B-O-L-L-Y-W-O-O-D. A hit reveals every copy of that
+  letter and turns the key green. A miss grays out the key and crosses
+  out the next BOLLYWOOD letter with a `/`, writing the missed letter
+  under it. Reveal the whole title to win the round; if all 9 are
+  crossed out, the setter wins. The setter watches the same board, with
+  the letters that haven't been guessed yet shown faintly.
+- **Scoring:** 1 point per round won; most points after the last round
+  wins the session, with a draw on equal points.
+
+**Sync.** The title stays on the setter's device until the round ends.
+Messages: `HELLO`, `CONFIG`, `AGAIN_REQUEST`, `SETTINGS`, `TITLE_SET`
+(only the shape, e.g. `"_ ______"`), `GUESS`, `RESULT` (the positions
+hit, plus the outcome and full title once the round is over) and `NEXT`.
+The setter is the authority for its own round: it resolves each `GUESS`
+and both sides apply the `RESULT`. Every message carries `session` and
+`round`, and stale ones are dropped. If either player re-opens the game,
+`HELLO` sends both back to setup.
 
 ## Known limitations
 
