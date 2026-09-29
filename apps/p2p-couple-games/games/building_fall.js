@@ -59,7 +59,7 @@
   const SOUND_SCRIPT_SRC = 'games/assets/building_fall_sounds.js';
 
   // ---- Configuration ------------------------------------------------------
-  const TIMER_OPTIONS = [30, 60, 90];          // seconds; add values here
+  const TIMER_OPTIONS = [10, 30, 60, 90];         // seconds; add values here
   const DEFAULT_TIMER = 30;
   // Difficulty = how many of the 3 openings on each floor are safe.
   const DIFFICULTIES = {

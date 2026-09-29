@@ -15,7 +15,7 @@ step, just the two browsers talking to each other.
 | 🚢 Battleship | Turn-based | Classic 10×10 grid and 5-ship fleet; turns alternate every shot (no extra shot on a hit). |
 | 🔲 Dots and Boxes | Turn-based | Host picks the board size (3×3 to 10×10); completing a box gives you another turn. |
 | 🔦 Laser Link | Co-op puzzle | Each player controls half the mirrors on a shared grid and only sees their own, so you have to talk it through to guide the beam to the target. |
-| 🏢 Building Fall | Simultaneous, timed | 3D trust-or-betray game. Each floor has 3 openings; you can't see which of yours are on fire, but you can see your partner's. Either player sets floors (3–20), timer (30/60/90 s) and difficulty (Easy: 2 safe + 1 fire, Hard: 1 safe + 2 fire). Every jump drops a floor: safe +10, fire −5 (your character darkens a little per fire). Both play to the ground; highest score wins. |
+| 🏢 Building Fall | Simultaneous, timed | 3D trust-or-betray game. Each floor has 3 openings; you can't see which of yours are on fire, but you can see your partner's. Either player sets floors (3–20), timer (10/30/60/90 s) and difficulty (Easy: 2 safe + 1 fire, Hard: 1 safe + 2 fire). Every jump drops a floor: safe +10, fire −5 (your character darkens a little per fire). Both play to the ground; highest score wins. |
 
 ## How it works
 
@@ -189,7 +189,7 @@ partner's, so the only way to know is to ask. Your partner can tell you
 the truth or lie.
 
 - **Settings (either player):** floors (3–20, default 10), floor timer
-  (`TIMER_OPTIONS = [30, 60, 90]`) and difficulty (`DIFFICULTIES`:
+  (`TIMER_OPTIONS = [10, 30, 60, 90]`) and difficulty (`DIFFICULTIES`:
   **Easy** has 2 safe openings and 1 fire per floor, **Hard** has 1 safe
   and 2 fire). Both players can change them at the same time and each
   change shows up on both screens. Every `CONFIG` carries a revision
